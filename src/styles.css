@@ -233,3 +233,12 @@ footer span:nth-child(2){display:none}
 
 @media(max-width:700px){.focus-panel{height:min(44svh,430px)}
 }
+.hero-copy>*{pointer-events:none}
+.hero-copy button,.hero-copy a{pointer-events:auto}
+.is-focused .room-nav{display:none}
+@media(min-width:701px) and (max-width:1100px){.room-nav{top:auto;left:48px;right:48px;bottom:74px;transform:none;width:auto;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:7px;padding:0;background:none;border:0;backdrop-filter:none}
+.room-nav .nav-heading{grid-column:1/-1;padding-bottom:8px}
+.room-nav button{min-height:70px;padding:8px 10px;border:1px solid rgba(255,255,255,.24);background:rgba(12,18,17,.76)}
+.room-nav button:hover,.room-nav button.active{padding-left:10px}
+.room-nav .arrow{display:none}
+}
