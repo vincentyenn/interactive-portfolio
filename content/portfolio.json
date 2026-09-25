@@ -1,0 +1,55 @@
+{
+  "name": "Vincent Yen",
+  "role": "Computer science student and creative developer",
+  "summary": "I build thoughtful web experiences, explore secure systems, and tell stories behind the camera.",
+  "about": "I study computer science at Texas A&M with a cybersecurity minor. I enjoy building interactive products, learning how systems stay reliable, and capturing Aggie football through videography. Music, sports, and cooking keep me curious outside the screen.",
+  "education": "Texas A&M University · B.S. Computer Science · Cybersecurity minor",
+  "experience": [
+    {
+      "company": "USAA",
+      "role": "Software Engineering Intern",
+      "period": "Summer 2026",
+      "summary": "Shipped improvements to a production auto claims experience using React, TypeScript, Java, and Spring Boot."
+    },
+    {
+      "company": "The University of Texas at Dallas",
+      "role": "Research Intern",
+      "period": "Summer 2023",
+      "summary": "Worked with a five-person team on machine-learning tools for accessible text simplification."
+    }
+  ],
+  "projects": [
+    {
+      "id": "personal-website",
+      "title": "Personal Website",
+      "category": "Portfolio system",
+      "year": "2026",
+      "status": "In progress",
+      "summary": "A personal portfolio shaped like a music library, designed to make exploring work feel natural.",
+      "tools": ["React", "TypeScript", "GSAP", "Three.js"],
+      "repository": "https://github.com/vincentyenn/portfolio"
+    },
+    {
+      "id": "coursework-archive",
+      "title": "Coursework Archive",
+      "category": "Web collection",
+      "year": "2026",
+      "status": "Curating",
+      "summary": "Selected technical work organized around the decisions, constraints, and lessons behind each build.",
+      "tools": ["JavaScript", "HTML", "CSS"]
+    },
+    {
+      "id": "interface-experiments",
+      "title": "Interface Experiments",
+      "category": "Interaction studies",
+      "year": "2026",
+      "status": "Ongoing",
+      "summary": "Focused prototypes exploring motion, hierarchy, and the feel of responsive interfaces.",
+      "tools": ["React", "GSAP", "Prototyping"]
+    }
+  ],
+  "links": {
+    "github": "https://github.com/vincentyenn",
+    "linkedin": "https://www.linkedin.com/in/vincentcyen/"
+  }
+}
