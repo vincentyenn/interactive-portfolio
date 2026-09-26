@@ -14,7 +14,7 @@
 
 - Modify `src/App.tsx`: route parsing/serialization, History API synchronization, destination navigation, project list/detail states, skip link, and removal of the lower content page.
 - Keep `src/LoftScene.tsx` API unchanged unless a compile-time mismatch appears. It already receives `focus` and `selectedProject`, animates to each destination, and calls `onFocus` / `onProject` for room hotspots and blueprints.
-- Modify `src/styles.css`: make the app a fixed `100dvh` viewport, remove long-page rules, preserve the loft composition, and add persistent desktop navigation plus the compact mobile menu and full-screen destination panel.
+- Modify `src/styles.css`: make the app a fixed `100dvh` viewport, remove long-page rules, preserve the loft composition, and add persistent desktop navigation plus a compact mobile menu and fixed lower destination panel that leaves the scene visible above it.
 - Modify `README.md`: describe the entire-site room navigation and hash routes instead of a hero followed by page content.
 - Keep `content/portfolio.json`, the GLB, scripts, and package dependencies unchanged.
 
@@ -23,7 +23,7 @@
 **Files:**
 - Modify: `src/App.tsx`
 
-- [ ] **Step 1: Define the route state and route parser**
+- [x] **Step 1: Define the route state and route parser**
 
 Add this below the existing `sections` declaration. It maps public route names to the camera focus names and project slugs to the existing array indexes.
 
@@ -46,7 +46,7 @@ function routeFromHash(hash: string): RouteState {
 }
 ```
 
-- [ ] **Step 2: Add the canonical route serializer**
+- [x] **Step 2: Add the canonical route serializer**
 
 ```tsx
 function hashForRoute(route: RouteState): string {
@@ -60,7 +60,7 @@ function hashForRoute(route: RouteState): string {
 }
 ```
 
-- [ ] **Step 3: Review route mappings against the spec**
+- [x] **Step 3: Review route mappings against the spec**
 
 Confirm the parser and serializer pair covers `#/room`, `#/overview`, `#/projects`, each project slug, `#/experience`, `#/about`, and `#/contact`. Unknown route names and unknown project slugs must resolve to the room state.
 
@@ -69,7 +69,7 @@ Confirm the parser and serializer pair covers `#/room`, `#/overview`, `#/project
 **Files:**
 - Modify: `src/App.tsx`
 
-- [ ] **Step 1: Initialize the app from the address bar**
+- [x] **Step 1: Initialize the app from the address bar**
 
 Replace the separate `focus` and `selectedProject` state declarations with one route state. Normalize an empty or invalid hash with `replaceState` so loading the root opens at `#/room`.
 
@@ -83,7 +83,7 @@ const [route, setRoute] = useState<RouteState>(() => {
 const { focus, selectedProject } = route
 ```
 
-- [ ] **Step 2: Add one route transition function**
+- [x] **Step 2: Add one route transition function**
 
 All buttons and 3D callbacks must use this function. It pushes only changed URLs and updates React state immediately because `pushState` does not emit `popstate`.
 
@@ -95,7 +95,7 @@ const navigate = useCallback((next: RouteState) => {
 }, [])
 ```
 
-- [ ] **Step 3: Restore route state on Back, Forward, and external hash changes**
+- [x] **Step 3: Restore route state on Back, Forward, and external hash changes**
 
 ```tsx
 useEffect(() => {
@@ -114,7 +114,7 @@ useEffect(() => {
 }, [])
 ```
 
-- [ ] **Step 4: Route existing callbacks through `navigate`**
+- [x] **Step 4: Route existing callbacks through `navigate`**
 
 Replace state-only updates with `navigate({ focus: next, selectedProject: null })`, `navigate({ focus: 'projects', selectedProject: index })`, and `navigate({ focus: 'room', selectedProject: null })`. Keep reduced-motion camera handling inside the existing `CameraDirector`.
 
@@ -123,32 +123,32 @@ Replace state-only updates with `navigate({ focus: next, selectedProject: null }
 **Files:**
 - Modify: `src/App.tsx`
 
-- [ ] **Step 1: Keep the workbench list separate from project detail**
+- [x] **Step 1: Keep the workbench list separate from project detail**
 
 In `FocusPanel`, render the blueprint choices only when `selectedProject === null`. When a project is selected, replace the list with that project's detail and a **Back to blueprints** button. Use the selected project's `id` to generate the route through `navigate`.
 
-- [ ] **Step 2: Keep project details within one panel view**
+- [x] **Step 2: Keep project details within one panel view**
 
 Show the existing title, summary, year, status, tools, and optional repository link. Do not render the list and detail at the same time. Keep a separate **Back to the loft** action that routes to `#/room`.
 
-- [ ] **Step 3: Preserve focus as the project route changes**
+- [x] **Step 3: Preserve focus as the project route changes**
 
-Add `lastProjectIndexRef` in `App` and update it whenever `onProject(index)` opens a blueprint. Focus the project detail heading after opening a blueprint. When the route returns to `#/projects` through the Back to blueprints button or browser Back/Forward, focus the saved blueprint button if the list is mounted. Returning to the room focuses the originating destination control when it exists.
+Keep `lastProjectIndexRef` and the blueprint button refs inside `FocusPanel`, where the list is rendered. Focus the project detail heading after opening a blueprint. When the route returns to `#/projects` through the Back to blueprints button or browser Back/Forward, focus the saved blueprint button if the list is mounted. Returning to the room focuses the originating destination control when it exists.
 
 ## Task 4: Route Every Navigation Entry Point
 
 **Files:**
 - Modify: `src/App.tsx`
 
-- [ ] **Step 1: Use the same route transition for all HTML controls**
+- [x] **Step 1: Use the same route transition for all HTML controls**
 
 Wire the room navigation, Start at the computer, brand button, header Contact control, panel destination links, Back to the loft button, and canvas callbacks to `navigate`. Map the computer to `#/overview`; keep the other destination names in their route paths.
 
-- [ ] **Step 2: Keep external destinations as external links**
+- [x] **Step 2: Keep external destinations as external links**
 
 Leave GitHub, LinkedIn, and project repository links as ordinary anchors with their existing `target` and `rel` attributes. Remove only anchors that jump to the old lower page.
 
-- [ ] **Step 3: Keep destination navigation available while a panel is open**
+- [x] **Step 3: Keep destination navigation available while a panel is open**
 
 Remove the focused-state rule that hides `.room-nav` on desktop. The active route stays highlighted and users can switch directly between destinations.
 
@@ -158,19 +158,19 @@ Remove the focused-state rule that hides `.room-nav` on desktop. The active rout
 - Modify: `src/App.tsx`
 - Modify: `src/styles.css`
 
-- [ ] **Step 1: Remove the lower `SiteContent` page**
+- [x] **Step 1: Remove the lower `SiteContent` page**
 
 Delete the `SiteContent` component and its render after the hero. Remove the old footer, `#portfolio-content` target, and scroll-to-content links. Keep all portfolio facts in the Overview, Projects, Experience, About, and Contact panels.
 
-- [ ] **Step 2: Make the loft app fill and clip to the viewport**
+- [x] **Step 2: Make the loft app fill and clip to the viewport**
 
 Set the root app shell to `height: 100dvh; min-height: 0; overflow: hidden`. Set `html`, `body`, and `#root` to fill the viewport and disable document vertical overflow. Preserve the existing canvas size and vignette layers.
 
-- [ ] **Step 3: Keep all panel content inside the viewport**
+- [x] **Step 3: Keep all panel content inside the viewport**
 
 Remove `overflow: auto` from `.focus-panel`. Adjust desktop panel spacing and mobile type/layout so the current portfolio copy fits without panel scrolling. Keep the 3D room visible behind the panel and keep the camera transition visible.
 
-- [ ] **Step 4: Replace the scroll-based skip link**
+- [x] **Step 4: Replace the scroll-based skip link**
 
 Give the room navigation `id="room-navigation"` and `tabIndex={-1}`. The skip link prevents anchor scrolling and focuses that navigation element, so keyboard users can bypass the decorative canvas without changing routes.
 
@@ -180,15 +180,15 @@ Give the room navigation `id="room-navigation"` and `tabIndex={-1}`. The skip li
 - Modify: `src/App.tsx`
 - Modify: `src/styles.css`
 
-- [ ] **Step 1: Add the compact mobile destination menu control**
+- [x] **Step 1: Add the compact mobile destination menu control**
 
 Add a button in the header with an accessible name, `aria-expanded`, and a state-controlled destination menu. Selecting a destination closes the menu and calls `navigate`.
 
-- [ ] **Step 2: Keep mobile views within the same viewport**
+- [x] **Step 2: Keep mobile views within the same viewport**
 
-At widths up to 700px, use the full-screen destination panel and compact menu described in the spec. Preserve a visible path back to the room and avoid fixed controls covering the panel's final link.
+At widths up to 700px, keep the destination panel fixed to the bottom of the viewport and leave enough of the 3D scene exposed above it for camera motion and hotspot taps. The app still occupies one viewport, with no document or panel scrolling. Preserve a visible path back to the room and avoid fixed controls covering the panel's final link.
 
-- [ ] **Step 3: Account for short mobile viewports and safe areas**
+- [x] **Step 3: Account for short mobile viewports and safe areas**
 
 Use `100dvh`, safe-area insets, and the existing short-height media query. Ensure the contact action, project Back controls, and About/Experience copy remain visible without vertical page or panel scrolling.
 
@@ -198,19 +198,19 @@ Use `100dvh`, safe-area insets, and the existing short-height media query. Ensur
 - Modify: `src/App.tsx`
 - Modify: `src/styles.css`
 
-- [ ] **Step 1: Keep navigation usable during scene loading**
+- [x] **Step 1: Keep navigation usable during scene loading**
 
 Keep the header, route menu, and opening intro outside the Suspense boundary. The current `Preparing the loft…` status remains announced while the GLB loads.
 
-- [ ] **Step 2: Keep the same routes when WebGL fails**
+- [x] **Step 2: Keep the same routes when WebGL fails**
 
 Retain the existing WebGL detection, error boundary, and context-loss handling. Render all HTML panels and route controls over the existing CSS background when the scene fails; the panels must not depend on the lower page.
 
-- [ ] **Step 3: Keep route changes accessible**
+- [x] **Step 3: Keep route changes accessible**
 
 Use semantic buttons for in-site route transitions, maintain visible keyboard focus, focus the active panel heading, preserve focus on Back, and keep the canvas marked decorative to assistive technology.
 
-- [ ] **Step 4: Preserve reduced-motion behavior**
+- [x] **Step 4: Preserve reduced-motion behavior**
 
 Keep `prefers-reduced-motion` passed to `LoftScene`; reduced-motion users receive immediate camera changes. Do not add route animations to the DOM panels that bypass the existing reduced-motion CSS.
 
@@ -219,21 +219,21 @@ Keep `prefers-reduced-motion` passed to `LoftScene`; reduced-motion users receiv
 **Files:**
 - Modify: `README.md`
 
-- [ ] **Step 1: Describe the site as one room-based portfolio**
+- [x] **Step 1: Describe the site as one room-based portfolio**
 
 Update the README introduction and exploration instructions to state that Overview, Projects, Experience, About, and Contact all live in the full-screen loft. Document the hash-route format, project-detail Back behavior, no-WebGL fallback, and keyboard navigation.
 
-- [ ] **Step 2: Run the production build**
+- [x] **Step 2: Run the production build**
 
 Run: `npm run build`
 
 Expected: TypeScript and Vite complete without errors; assets remain under the `/interactive-portfolio/` base path.
 
-- [ ] **Step 3: Check the approved acceptance criteria in the browser**
+- [x] **Step 3: Check the approved acceptance criteria in the browser**
 
 Use the running preview and check desktop and mobile: no document or panel vertical scrolling; all five destinations via hotspot and HTML controls; each project route and Back to blueprints; direct route refresh and browser Back/Forward; keyboard focus; reduced-motion camera changes; and the `?no3d=1` fallback.
 
-- [ ] **Step 4: Review the final changes and commit**
+- [x] **Step 4: Review the final changes and commit**
 
 Run `git diff --check`, inspect the route and layout changes, then commit the implementation with message `feat: make the loft the full portfolio site`.
 
