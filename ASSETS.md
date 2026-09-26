@@ -4,6 +4,8 @@ This room was modeled and arranged for this portfolio. Architecture, stairs, des
 
 The following 1K PBR textures and detailed prop models were downloaded from [Poly Haven](https://polyhaven.com/), whose assets are [CC0](https://polyhaven.com/license). They are embedded into the final GLB and also kept as source files in `assets/source/`.
 
+The build script keeps the source images intact and packs reduced 512px copies of the small prop maps and roughness masks into the `.blend` and GLB. This lowers the browser model transfer from about 20 MB to about 17 MB while retaining full-resolution color and architectural normal maps where they are visible.
+
 | Asset | Use | Source |
 | --- | --- | --- |
 | Concrete Floor Worn 001 | Loft floor | [Poly Haven](https://polyhaven.com/a/concrete_floor_worn_001) |

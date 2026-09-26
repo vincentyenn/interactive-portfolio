@@ -1,8 +1,9 @@
-import { Component, Suspense, lazy, useCallback, useEffect, useState, type ReactNode } from 'react'
+import { Component, Suspense, lazy, useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import type { Focus } from './LoftScene'
 import portfolio from '../content/portfolio.json'
 
 const LoftScene = lazy(() => import('./LoftScene'))
+type SectionFocus = Exclude<Focus, 'room'>
 
 class SceneImportBoundary extends Component<{ children: ReactNode, onError: () => void }, { failed: boolean }> {
   state = { failed: false }
@@ -11,7 +12,7 @@ class SceneImportBoundary extends Component<{ children: ReactNode, onError: () =
   render() { return this.state.failed ? null : this.props.children }
 }
 
-const sections: { id: Exclude<Focus, 'room'>, number: string, label: string, object: string }[] = [
+const sections: { id: SectionFocus, number: string, label: string, object: string }[] = [
   { id: 'computer', number: '01', label: 'Overview', object: 'The computer' },
   { id: 'projects', number: '02', label: 'Projects', object: 'The workbench' },
   { id: 'experience', number: '03', label: 'Experience', object: 'The wall' },
@@ -43,19 +44,53 @@ function Arrow({ diagonal = false }: { diagonal?: boolean }) {
   return <span aria-hidden="true" className="arrow">{diagonal ? '↗' : '→'}</span>
 }
 
-function FocusPanel({ focus, selectedProject, onFocus, onProject, onCloseProject }: {
+function FocusPanel({ focus, selectedProject, reducedMotion, sceneAvailable, onFocus, onBack, onProject, onCloseProject }: {
   focus: Focus
   selectedProject: number | null
+  reducedMotion: boolean
+  sceneAvailable: boolean
   onFocus: (next: Focus) => void
+  onBack: (from: SectionFocus) => void
   onProject: (index: number) => void
   onCloseProject: () => void
 }) {
+  const panelRef = useRef<HTMLElement>(null)
+  const detailRef = useRef<HTMLDivElement>(null)
+  const projectButtonsRef = useRef<(HTMLButtonElement | null)[]>([])
+
+  useEffect(() => {
+    if (focus === 'room') return
+    panelRef.current?.scrollTo({ top: 0, behavior: 'instant' })
+    panelRef.current?.focus({ preventScroll: true })
+  }, [focus])
+
+  useEffect(() => {
+    if (focus !== 'projects' || selectedProject === null) return
+    const frame = requestAnimationFrame(() => {
+      const panel = panelRef.current
+      const detail = detailRef.current
+      if (!panel || !detail) return
+      const top = panel.scrollTop + detail.getBoundingClientRect().top - panel.getBoundingClientRect().top - 14
+      panel.scrollTo({ top, behavior: reducedMotion ? 'instant' : 'smooth' })
+      detail.focus({ preventScroll: true })
+    })
+    return () => cancelAnimationFrame(frame)
+  }, [focus, selectedProject, reducedMotion])
+
+  const closeProject = () => {
+    const index = selectedProject
+    onCloseProject()
+    requestAnimationFrame(() => {
+      if (index !== null) projectButtonsRef.current[index]?.focus({ preventScroll: true })
+    })
+  }
+
   const item = sections.find((section) => section.id === focus)
   if (!item) return null
   const project = selectedProject === null ? null : portfolio.projects[selectedProject]
-  return <aside className={`focus-panel focus-${focus}`} aria-label={`${item.label} details`}>
+  return <aside ref={panelRef} tabIndex={-1} className={`focus-panel focus-${focus}`} aria-label={`${item.label} details`}>
     <div className="panel-topline"><span>THE LOFT / {item.number}</span><span>{item.object}</span></div>
-    <button className="back-link" onClick={() => onFocus('room')} aria-label="Back to loft overview">← &nbsp; Back to the loft</button>
+    <button className="back-link" onClick={() => onBack(item.id)} aria-label="Back to loft overview">← &nbsp; Back to the loft</button>
     {focus === 'computer' && <>
       <p className="eyebrow">At the computer</p>
       <h2>Hi, I’m<br /><em>Vincent.</em></h2>
@@ -70,15 +105,15 @@ function FocusPanel({ focus, selectedProject, onFocus, onProject, onCloseProject
     {focus === 'projects' && <>
       <p className="eyebrow">Top view / workbench</p>
       <h2>Selected<br /><em>work.</em></h2>
-      <p className="panel-copy">Each blueprint is a project. Pick one on the table or from this list.</p>
+      <p className="panel-copy">{sceneAvailable ? 'Each blueprint is a project. Pick one on the table or from this list.' : 'Choose a project from the list below.'}</p>
       <div className="project-picker" aria-label="Select a project">
         {portfolio.projects.map((entry, index) => <button key={entry.id} className={`project-choice ${selectedProject === index ? 'selected' : ''}`}
-          onClick={() => onProject(index)} aria-pressed={selectedProject === index}>
+          ref={(node) => { projectButtonsRef.current[index] = node }} onClick={() => onProject(index)} aria-pressed={selectedProject === index}>
           <span className="choice-number">0{index + 1}</span><span>{entry.title}<small>{entry.category}</small></span><Arrow />
         </button>)}
       </div>
-      {project && <div className="project-detail" role="region" aria-label={`${project.title} details`}>
-        <div className="detail-heading"><span>BLUEPRINT / 0{selectedProject! + 1}</span><button onClick={onCloseProject} aria-label="Close project details">×</button></div>
+      {project && <div ref={detailRef} tabIndex={-1} className="project-detail" role="region" aria-label={`${project.title} details`}>
+        <div className="detail-heading"><span>BLUEPRINT / 0{selectedProject! + 1}</span><button onClick={closeProject} aria-label="Close project details">×</button></div>
         <h3>{project.title}</h3>
         <p>{project.summary}</p>
         <div className="detail-meta"><span>{project.year} · {project.status}</span><span>{project.tools.join(' / ')}</span></div>
@@ -108,7 +143,7 @@ function FocusPanel({ focus, selectedProject, onFocus, onProject, onCloseProject
   </aside>
 }
 
-function SiteContent({ onFocus }: { onFocus: (next: Focus) => void }) {
+function SiteContent({ onFocus, reducedMotion, sceneAvailable }: { onFocus: (next: Focus) => void, reducedMotion: boolean, sceneAvailable: boolean }) {
   return <main id="portfolio-content" className="site-content">
     <div className="content-heading"><p className="eyebrow">Beyond the room</p><h2>A closer look.</h2><p>Explore the portfolio in a simple format.</p></div>
     <section id="projects" className="content-section" aria-labelledby="projects-title">
@@ -117,7 +152,7 @@ function SiteContent({ onFocus }: { onFocus: (next: Focus) => void }) {
         <span className="card-number">0{index + 1} / {project.category}</span><h4>{project.title}</h4><p>{project.summary}</p>
         <div className="card-bottom"><span>{project.status}</span>{'repository' in project && project.repository && <a href={project.repository} target="_blank" rel="noreferrer">Repository <Arrow diagonal /></a>}</div>
       </article>)}</div>
-      <button className="content-scene-link" onClick={() => { window.scrollTo({ top: 0, behavior: 'smooth' }); onFocus('projects') }}>View the workbench <Arrow /></button>
+      {sceneAvailable && <button className="content-scene-link" onClick={() => { window.scrollTo({ top: 0, behavior: reducedMotion ? 'instant' : 'smooth' }); onFocus('projects') }}>View the workbench <Arrow /></button>}
     </section>
     <section id="experience" className="content-section two-col" aria-labelledby="experience-title">
       <div className="section-heading"><span>02 / Experience</span><h3 id="experience-title">Learning by making.</h3></div>
@@ -129,7 +164,7 @@ function SiteContent({ onFocus }: { onFocus: (next: Focus) => void }) {
     <section id="contact" className="content-section contact-section" aria-labelledby="contact-title">
       <span>04 / Contact</span><h3 id="contact-title">Have something in mind?</h3><a href={portfolio.links.linkedin} target="_blank" rel="noreferrer">Let’s connect <Arrow diagonal /></a>
     </section>
-    <footer><span>© {new Date().getFullYear()} Vincent Yen</span><span>Made as an actual 3D space.</span><button onClick={() => { window.scrollTo({ top: 0, behavior: 'smooth' }); onFocus('room') }}>Back to the loft ↑</button></footer>
+    <footer><span>© {new Date().getFullYear()} Vincent Yen</span><span>Made as an actual 3D space.</span><button onClick={() => { window.scrollTo({ top: 0, behavior: reducedMotion ? 'instant' : 'smooth' }); onFocus('room') }}>Back to the loft ↑</button></footer>
   </main>
 }
 
@@ -138,16 +173,23 @@ export default function App() {
   const [selectedProject, setSelectedProject] = useState<number | null>(null)
   const [sceneReady, setSceneReady] = useState(false)
   const [sceneFailed, setSceneFailed] = useState(() => !canUseWebGL() || new URLSearchParams(window.location.search).has('no3d'))
+  const navButtonsRef = useRef<Partial<Record<SectionFocus, HTMLButtonElement | null>>>({})
   const reducedMotion = useMedia('(prefers-reduced-motion: reduce)')
   const mobile = useMedia('(max-width: 700px)')
   const onReady = useCallback(() => setSceneReady(true), [])
   const onError = useCallback(() => setSceneFailed(true), [])
   const onFocus = useCallback((next: Focus) => { setSelectedProject(null); setFocus(next) }, [])
+  const onBack = useCallback((from: SectionFocus) => {
+    setSelectedProject(null)
+    setFocus('room')
+    requestAnimationFrame(() => navButtonsRef.current[from]?.focus({ preventScroll: true }))
+  }, [])
   const onProject = useCallback((index: number) => { setFocus('projects'); setSelectedProject(index) }, [])
 
   useEffect(() => {
-    if (focus === 'room') document.body.style.cursor = ''
-  }, [focus])
+    if (focus === 'room' || sceneFailed) document.body.style.cursor = ''
+    return () => { document.body.style.cursor = '' }
+  }, [focus, sceneFailed])
 
   return <>
     <a className="skip-link" href="#portfolio-content">Skip the 3D scene</a>
@@ -173,13 +215,13 @@ export default function App() {
       {sceneFailed && <div className="scene-fallback" role="status"><span>3D VIEW UNAVAILABLE</span><p>The portfolio is ready below, and every room destination is available here.</p></div>}
       <nav className="room-nav" aria-label="Explore the loft">
         <span className="nav-heading">EXPLORE THE ROOM <span aria-hidden="true">↘</span></span>
-        {sections.map((section) => <button key={section.id} className={focus === section.id ? 'active' : ''} onClick={() => onFocus(section.id)} aria-current={focus === section.id ? 'page' : undefined}>
+        {sections.map((section) => <button key={section.id} ref={(node) => { navButtonsRef.current[section.id] = node }} className={focus === section.id ? 'active' : ''} onClick={() => onFocus(section.id)} aria-pressed={focus === section.id}>
           <span className="nav-index">{section.number}</span><span><strong>{section.label}</strong><small>{section.object}</small></span><Arrow />
         </button>)}
       </nav>
-      <FocusPanel focus={focus} selectedProject={selectedProject} onFocus={onFocus} onProject={onProject} onCloseProject={() => setSelectedProject(null)} />
-      <div className="hero-footer"><span>INTERACTIVE SPACE &nbsp; / &nbsp; CLICK OBJECTS TO EXPLORE</span><a href="#portfolio-content">SCROLL FOR THE FULL STORY <span aria-hidden="true">↓</span></a></div>
+      <FocusPanel focus={focus} selectedProject={selectedProject} reducedMotion={reducedMotion} sceneAvailable={!sceneFailed} onFocus={onFocus} onBack={onBack} onProject={onProject} onCloseProject={() => setSelectedProject(null)} />
+      <div className="hero-footer"><span>{sceneFailed ? 'USE THE DESTINATIONS TO EXPLORE' : 'INTERACTIVE SPACE  /  CLICK OBJECTS TO EXPLORE'}</span><a href="#portfolio-content">SCROLL FOR THE FULL STORY <span aria-hidden="true">↓</span></a></div>
     </section>
-    <SiteContent onFocus={onFocus} />
+    <SiteContent onFocus={onFocus} reducedMotion={reducedMotion} sceneAvailable={!sceneFailed} />
   </>
 }

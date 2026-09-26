@@ -72,7 +72,7 @@ button:focus-visible,a:focus-visible{outline:2px solid #f3b783;outline-offset:4p
 .scene-fallback>span{color:#e9b57e}
 .scene-fallback p{font-size:12px;line-height:1.5;margin:7px 0 0}
 
-.focus-panel{position:absolute;z-index:6;top:94px;right:0;bottom:50px;width:min(425px,36vw);padding:28px 39px 32px;background:rgba(17,22,21,.95);border-left:1px solid rgba(234,213,184,.28);box-shadow:-30px 0 70px rgba(0,0,0,.18);overflow:auto;backdrop-filter:blur(18px)}
+.focus-panel{position:absolute;z-index:6;top:94px;right:0;bottom:50px;width:min(425px,36vw);padding:28px 39px 32px;background:rgba(17,22,21,.95);border-left:1px solid rgba(234,213,184,.28);box-shadow:-30px 0 70px rgba(0,0,0,.18);overflow:auto;overscroll-behavior:contain;backdrop-filter:blur(18px)}
 .focus-panel .panel-topline{display:flex;justify-content:space-between;color:#98a69c;font-size:9px}
 .back-link{padding:0;margin-top:35px;background:none;border:0;color:#e9b985;text-transform:uppercase}
 .back-link:hover{color:#fff}
@@ -161,7 +161,7 @@ to{opacity:1;transform:translateY(0)}
 .content-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
 
-@media(max-width:700px){.hero{height:100svh;min-height:760px}
+@media(max-width:700px){.hero{height:100svh;height:100dvh;min-height:0}
 .site-header{padding:18px 22px}
 .brand-mark{width:36px;height:36px;font-size:16px}
 .brand-name{font-size:10px}
@@ -236,6 +236,14 @@ footer span:nth-child(2){display:none}
 .hero-copy>*{pointer-events:none}
 .hero-copy button,.hero-copy a{pointer-events:auto}
 .is-focused .room-nav{display:none}
+@media(max-width:700px) and (max-height:700px){.hero-copy{top:80px}
+.hero h1{font-size:clamp(45px,9vw,58px)}
+.hero-intro{font-size:12px;line-height:1.5}
+.hero-actions{margin-top:12px}
+.room-nav{bottom:50px}
+.room-nav button{min-height:64px;padding:5px}
+.hero-footer{padding:8px 0}
+}
 @media(min-width:701px) and (max-width:1100px){.room-nav{top:auto;left:48px;right:48px;bottom:74px;transform:none;width:auto;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:7px;padding:0;background:none;border:0;backdrop-filter:none}
 .room-nav .nav-heading{grid-column:1/-1;padding-bottom:8px}
 .room-nav button{min-height:70px;padding:8px 10px;border:1px solid rgba(255,255,255,.24);background:rgba(12,18,17,.76)}

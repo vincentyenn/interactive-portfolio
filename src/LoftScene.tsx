@@ -44,6 +44,7 @@ const mobileMarks: Partial<Record<Focus, CameraMark>> = {
 function CameraDirector({ focus, reducedMotion, mobile }: Pick<Props, 'focus' | 'reducedMotion' | 'mobile'>) {
   const { camera } = useThree()
   const state = useRef({ tx: 0, ty: 2.15, tz: -0.8, ux: 0, uy: 1, uz: 0, fov: 46 })
+  const initialized = useRef(false)
 
   useEffect(() => {
     const mark = mobile ? mobileMarks[focus] ?? marks[focus] : marks[focus]
@@ -56,7 +57,7 @@ function CameraDirector({ focus, reducedMotion, mobile }: Pick<Props, 'focus' | 
       ux: up[0], uy: up[1], uz: up[2],
       fov: mark.fov ?? 46,
     }
-    if (reducedMotion) {
+    if (reducedMotion || !initialized.current) {
       camera.position.set(values.x, values.y, values.z)
       Object.assign(state.current, values)
       camera.up.set(values.ux, values.uy, values.uz)
@@ -65,6 +66,7 @@ function CameraDirector({ focus, reducedMotion, mobile }: Pick<Props, 'focus' | 
         camera.updateProjectionMatrix()
       }
       camera.lookAt(values.tx, values.ty, values.tz)
+      initialized.current = true
       return
     }
     const targetObject = { ...state.current, x: camera.position.x, y: camera.position.y, z: camera.position.z }
@@ -118,21 +120,39 @@ function Model({ onReady, focus }: { onReady: () => void, focus: Focus }) {
       if (child instanceof THREE.Mesh) {
         child.receiveShadow = true
         child.castShadow = !child.name.includes('floor') && !child.name.includes('wall')
-        child.visible = focus !== 'projects' || !/ceiling|beam|pendant/i.test(child.name)
       }
     })
     onReady()
-  }, [focus, model, onReady])
+  }, [model, onReady])
+  useEffect(() => {
+    model.traverse((child) => {
+      if (child instanceof THREE.Mesh) child.visible = focus !== 'projects' || !/ceiling|beam|pendant/i.test(child.name)
+    })
+  }, [focus, model])
   return <primitive object={model} />
+}
+
+function WebGLContextGuard({ onError }: { onError: () => void }) {
+  const { gl } = useThree()
+  useEffect(() => {
+    const canvas = gl.domElement
+    const contextLost = (event: Event) => {
+      event.preventDefault()
+      onError()
+    }
+    canvas.addEventListener('webglcontextlost', contextLost)
+    return () => canvas.removeEventListener('webglcontextlost', contextLost)
+  }, [gl, onError])
+  return null
 }
 
 function LoftContent({ focus, selectedProject, reducedMotion, mobile, onFocus, onProject, onReady }: Omit<Props, 'onError'>) {
   return <>
     <color attach="background" args={['#161b1a']} />
     <fog attach="fog" args={['#202523', 13, 29]} />
-    <ambientLight intensity={1.35} color="#d8d9cc" />
-    <hemisphereLight args={['#c5d5d3', '#5a493b', 2.2]} />
-    <directionalLight position={[-3, 7, -1.5]} intensity={2.7} color="#cfe1e1" castShadow
+    <ambientLight intensity={0.72} color="#d8d9cc" />
+    <hemisphereLight args={['#c5d5d3', '#5a493b', 1.4]} />
+    <directionalLight position={[-3, 7, -1.5]} intensity={2.1} color="#cfe1e1" castShadow
       shadow-mapSize={[2048, 2048]} shadow-bias={-0.0003} shadow-camera-left={-9}
       shadow-camera-right={9} shadow-camera-top={9} shadow-camera-bottom={-9} />
     <spotLight position={[2.2, 5.4, 1]} angle={0.8} penumbra={0.75} intensity={150}
@@ -172,6 +192,7 @@ export default function LoftScene(props: Props) {
     <Canvas className="loft-canvas" shadows={!props.mobile} dpr={props.mobile ? [1, 1.15] : [1, 1.8]}
       camera={{ position: [0.2, 3.3, 8.6], fov: 46, near: 0.1, far: 65 }}
       gl={{ antialias: true, powerPreference: 'high-performance', toneMapping: THREE.ACESFilmicToneMapping }}>
+      <WebGLContextGuard onError={props.onError} />
       <Suspense fallback={null}>
         <LoftContent {...props} />
       </Suspense>

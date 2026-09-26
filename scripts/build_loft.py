@@ -6,6 +6,7 @@ converts Blender's Z-up coordinates to Three's Y-up coordinates.
 """
 
 import math
+import tempfile
 from pathlib import Path
 
 import bpy
@@ -135,6 +136,17 @@ def cylinder(name, pos, radius, depth, mat, vertices=20, rotation=None):
     return obj
 
 
+def sphere(name, pos, size, mat, segments=16, rings=8):
+    bpy.ops.mesh.primitive_uv_sphere_add(segments=segments, ring_count=rings, location=xyz(*pos))
+    obj = bpy.context.object
+    obj.name = name
+    obj.scale = (size[0], size[2], size[1])
+    assign(obj, mat)
+    for polygon in obj.data.polygons:
+        polygon.use_smooth = True
+    return obj
+
+
 def tube(name, a, b, radius, mat, vertices=10):
     av, bv = Vector(xyz(*a)), Vector(xyz(*b))
     mid = (av + bv) * 0.5
@@ -227,6 +239,9 @@ for x in (-5.87, -1.82):
         cube("mezzanine leg", (leg_x,1.5,depth), (0.15,3.0,0.15), black)
 for x in (-5.84, -4.85, -3.86, -2.87, -1.86):
     cube("mezzanine oak fascia", (x,2.89,3.08), (0.8,0.12,0.1), veneer)
+# A recessed light line gives the underside of the mezzanine a readable edge.
+cube("mezzanine light channel", (-3.83,2.84,3.015), (3.82,0.035,0.045), black)
+cube("mezzanine warm light diffuser", (-3.83,2.84,3.049), (3.67,0.012,0.014), glow)
 for depth in (-4.12, -3.25, -2.38, -1.51, -0.64, 0.23, 1.10, 1.97, 2.84):
     tube("loft railing upright", (-1.58,3.24,depth), (-1.58,4.18,depth), 0.027, black)
 tube("loft railing top", (-1.58,4.18,-4.25), (-1.58,4.18,3.02), 0.045, black)
@@ -247,9 +262,35 @@ for height in (0.62, 1.43, 2.27):
     cube("personal shelf", (-4.15,height,-2.67), (2.95,0.09,0.62), veneer, 0.02)
 for x in (-5.54, -2.74):
     cube("shelf steel frame", (x,1.44,-2.67), (0.06,2.75,0.57), black)
-for i, height in enumerate((0.65,1.47,2.31)):
-    cube("book spines", (-5.15+i*0.16,height+0.14,-2.66), (0.42,0.27,0.31), cream, 0.012)
-    cylinder("ceramic object", (-4.05+i*0.14,height+0.16,-2.61), 0.15, 0.3, cream)
+bookcloth = simple("muted book cloth", (0.19,0.26,0.27), 0.88)
+terracotta = simple("matte terracotta", (0.47,0.28,0.19), 0.84)
+leafgreen = simple("olive leaf", (0.13,0.24,0.17), 0.86)
+for row, height in enumerate((0.65,1.47,2.31)):
+    for index in range(4):
+        thickness = 0.07 + (index % 3) * 0.018
+        cube("shelf book", (-5.30+index*0.11,height+0.16,-2.62),
+             (thickness,0.27+((index+row)%3)*0.045,0.34),
+             (bookcloth, cream, dark, terracotta)[(index+row)%4], 0.006)
+    cylinder("shelf ceramic vessel", (-4.33+row*0.13,height+0.14,-2.61), 0.115, 0.28, cream)
+    cube("shelf photo frame", (-3.38-row*0.1,height+0.19,-2.72),
+         (0.39,0.34,0.055), black, 0.008)
+    cube("shelf photo mat", (-3.38-row*0.1,height+0.19,-2.68),
+         (0.31,0.26,0.005), cream)
+# A small plant gives the personal shelf a natural silhouette in the wide view.
+cylinder("plant ceramic pot", (-3.76,2.48,-2.57), 0.16, 0.28, terracotta, 20)
+cylinder("plant soil", (-3.76,2.63,-2.57), 0.145, 0.018, dark, 20)
+for angle in (0, math.pi/3, 2*math.pi/3, math.pi, 4*math.pi/3, 5*math.pi/3):
+    stem_x = -3.76 + 0.13*math.cos(angle)
+    stem_z = -2.57 + 0.13*math.sin(angle)
+    tube("plant stem", (-3.76,2.62,-2.57), (stem_x,2.93,stem_z), 0.011, leafgreen, 6)
+    leaf = sphere("plant leaf", (stem_x,2.95,stem_z), (0.085,0.17,0.035), leafgreen, 12, 6)
+    leaf.rotation_euler.z = angle
+
+# A run of slatted timber and a narrow dark reveal add depth behind the desk.
+cube("desk oak wall inset", (-1.54,1.55,-4.485), (3.15,2.86,0.055), veneer, 0.008)
+for x in (-2.94,-2.55,-2.16,-1.77,-1.38,-0.99,-0.60,-0.21):
+    cube("desk wall timber slat", (x,1.55,-4.43), (0.055,2.82,0.07), oak, 0.009)
+cube("desk wall shadow reveal", (-1.54,0.12,-4.425), (3.15,0.055,0.08), black)
 
 # Central computer desk: a real monitor with a readable authored screen texture.
 cube("computer oak desk", (-1.72,0.81,-2.11), (3.35,0.12,1.46), oak, 0.035)
@@ -294,6 +335,11 @@ for x,z in ((0.23,1.62),(3.1,0.11),(4.34,2.02)):
     cylinder("brass drawing weight", (x,1.07,z),0.043,0.075,brass)
 tube("architect ruler", (0.55,1.05,2.12),(1.93,1.05,2.12),0.018,brass)
 cube("closed sample book", (4.13,1.02,0.12),(0.57,0.06,0.48),cream,0.014)
+# A shallow tool tray makes the table read as a used workspace without
+# crossing the blueprint hit areas in the overhead project view.
+cube("workbench tool tray", (0.27,1.04,-0.02), (0.7,0.045,0.31), black, 0.012)
+for x in (0.10,0.24,0.38):
+    tube("drafting pen", (x,1.08,-0.13), (x,1.08,0.08), 0.009, brass, 8)
 
 # Experience display on the right rear wall, bordered in dark metal.
 cube("experience display frame", (2.74,2.63,-4.27), (3.14,2.2,0.12), black, 0.028)
@@ -301,6 +347,8 @@ image_plane("experience timeline artwork", (2.74,2.63,-4.192), 2.95,1.96,boardma
 for x in (1.22,4.27):
     cube("experience picture light mount", (x,3.86,-4.18),(0.08,0.18,0.08),brass)
 cube("experience picture light", (2.74,3.91,-4.12),(3.04,0.08,0.07),brass,0.018)
+cube("experience picture light diffuser", (2.74,3.865,-4.08),
+     (2.78,0.016,0.025), glow)
 
 # Contact door occupies the right wall bay.
 cube("contact door frame", (5.21,1.55,-3.21),(1.55,3.13,0.18),black,0.018)
@@ -313,7 +361,11 @@ cylinder("intercom light", (4.26,1.51,-4.31),0.023,0.015,glow,rotation=(math.pi/
 
 # Loose architecture, light fixtures, and props add depth and scale.
 for x,depth,height in ((-4.4,-0.1,2.83),(-0.3,-0.7,3.65),(3.7,-1.2,5.45)):
-    cylinder("pendant shade", (x,height,depth),0.28,0.11,black,24)
+    bpy.ops.mesh.primitive_cone_add(vertices=24, radius1=0.28, radius2=0.11,
+                                    depth=0.18, location=xyz(x,height,depth))
+    bpy.context.object.name = "pendant metal shade"
+    assign(bpy.context.object, black)
+    cylinder("pendant brass collar", (x,height+0.1,depth),0.115,0.025,brass,24)
     cylinder("warm pendant bulb", (x,height-0.11,depth),0.085,0.13,glow,18)
     tube("pendant wire", (x,height+0.07,depth),(x,6.0,depth),0.014,black)
 cube("floor rug", (-1.58,0.016,1.75),(2.1,0.025,1.85),dark,0.016)
@@ -325,6 +377,23 @@ for i in range(3):
 imported("desk_lamp_arm_01", (0.0,1.02,-0.13), 0.68)
 imported("modern_arm_chair_01", (-1.74,0.0,-0.55), 1.03)
 imported("american_football", (-3.75,1.53,-2.62), 0.33)
+
+# The imported props and roughness masks are tiny in the room view. Keep the
+# source files untouched; pack smaller temporary copies into the editable
+# Blender file and exported GLB to lower the browser and GPU texture budget.
+image_cache = tempfile.TemporaryDirectory(prefix="loft-image-cache-")
+for image in bpy.data.images:
+    if image.source != "FILE":
+        continue
+    name = image.name.lower()
+    prop = any(part in name for part in ("american_football", "desk_lamp_arm_01", "modern_arm_chair_01"))
+    roughness = "rough" in name or "_arm" in name
+    if prop or roughness:
+        if image.size[0] > 512 or image.size[1] > 512:
+            image.scale(512,512)
+            image.filepath_raw = str(Path(image_cache.name) / f"{image.name}.jpg")
+            image.file_format = "JPEG"
+            image.save()
 
 # Set up a repeatable Blender preview (not part of the exported scene).
 world = bpy.context.scene.world
