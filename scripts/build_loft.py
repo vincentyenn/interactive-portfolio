@@ -10,7 +10,7 @@ import tempfile
 from pathlib import Path
 
 import bpy
-from mathutils import Vector
+from mathutils import Matrix, Vector
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -78,7 +78,9 @@ def graphic(name, filename, emission=0):
     links = mat.node_tree.links
     bsdf = nodes.get("Principled BSDF")
     img = nodes.new("ShaderNodeTexImage")
-    img.image = bpy.data.images.load(str(GRAPHICS / filename), check_existing=True)
+    # Always load the current authored graphic. The editable blend keeps
+    # packed older copies, so reusing an image by path can silently export it.
+    img.image = bpy.data.images.load(str(GRAPHICS / filename), check_existing=False)
     links.new(img.outputs["Color"], bsdf.inputs["Base Color"])
     if emission:
         links.new(img.outputs["Color"], bsdf.inputs["Emission Color"])
@@ -86,17 +88,34 @@ def graphic(name, filename, emission=0):
     return mat
 
 
-plaster = texture("warm plaster", "painted_plaster_wall", 2.3)
-brick = texture("warm brick", "brick_wall_10", 1.6)
-concrete = texture("worn concrete", "concrete_floor_worn_001", 2.5)
-oak = texture("oiled oak", "oak_wood_planks", 1.2)
-veneer = texture("oak veneer", "oak_veneer_01", 1.4)
+plaster = texture("warm plaster", "painted_plaster_wall", 0.58)
+brick = texture("warm brick", "brick_wall_10", 0.7)
+concrete = texture("worn concrete", "concrete_floor_worn_001", 0.65)
+oak = texture("oiled oak", "oak_wood_planks", 0.92)
+veneer = texture("oak veneer", "oak_veneer_01", 0.9)
 black = simple("powder coated steel", (0.065, 0.072, 0.071), 0.38, 0.66)
 dark = simple("graphite rubber", (0.11, 0.13, 0.13), 0.78)
 brass = simple("brushed brass", (0.55, 0.38, 0.19), 0.35, 0.7)
+monitor_alloy = simple("monitor anodized graphite", (0.075, 0.09, 0.09), 0.27, 0.78)
 cream = simple("warm ceramic", (0.77, 0.73, 0.65), 0.58)
 glass = simple("window glass", (0.36, 0.48, 0.48), 0.11, 0.1)
-blue = simple("blueprint paper edge", (0.08, 0.19, 0.24), 0.85)
+glass.diffuse_color = (0.72, 0.84, 0.88, 0.12)
+glass.surface_render_method = "BLENDED"
+glass_bsdf = glass.node_tree.nodes.get("Principled BSDF")
+glass_bsdf.inputs["Base Color"].default_value = (0.72, 0.84, 0.88, 0.12)
+glass_bsdf.inputs["Alpha"].default_value = 0.16
+blue = simple("blueprint paper edge", (0.68, 0.70, 0.64), 0.94)
+paper_nodes = blue.node_tree.nodes
+paper_links = blue.node_tree.links
+paper_bsdf = paper_nodes.get("Principled BSDF")
+paper_noise = paper_nodes.new("ShaderNodeTexNoise")
+paper_noise.inputs["Scale"].default_value = 360
+paper_noise.inputs["Detail"].default_value = 2
+paper_bump = paper_nodes.new("ShaderNodeBump")
+paper_bump.inputs["Strength"].default_value = 0.12
+paper_bump.inputs["Distance"].default_value = 0.0015
+paper_links.new(paper_noise.outputs["Fac"], paper_bump.inputs["Height"])
+paper_links.new(paper_bump.outputs["Normal"], paper_bsdf.inputs["Normal"])
 glow = simple("soft lamp glow", (0.93, 0.7, 0.43), 0.32, emission=((1.0, 0.64, 0.31), 1.6))
 screenmat = graphic("portfolio monitor", "computer_screen.jpg", 0.55)
 boardmat = graphic("experience wall", "experience_board.jpg")
@@ -109,17 +128,34 @@ def assign(obj, mat):
     return obj
 
 
-def cube(name, pos, size, mat, bevel=0.0):
+def cube(name, pos, size, mat, bevel=None, bevel_segments=3):
     bpy.ops.mesh.primitive_cube_add(size=1, location=xyz(*pos))
     obj = bpy.context.object
     obj.name = name
     obj.dimensions = (size[0], size[2], size[1])
     bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
+    # Project each face in meters rather than stretching one UV tile over it.
+    uv = obj.data.uv_layers.active
+    for face in obj.data.polygons:
+        normal_axis = max(range(3), key=lambda axis: abs(face.normal[axis]))
+        axes = [axis for axis in range(3) if axis != normal_axis]
+        extents = [max(obj.data.vertices[obj.data.loops[index].vertex_index].co[axis]
+                       for index in face.loop_indices) -
+                   min(obj.data.vertices[obj.data.loops[index].vertex_index].co[axis]
+                       for index in face.loop_indices) for axis in axes]
+        u_axis, v_axis = axes if extents[0] >= extents[1] else axes[::-1]
+        for index in face.loop_indices:
+            point = obj.data.vertices[obj.data.loops[index].vertex_index].co
+            uv.data[index].uv = (point[u_axis], point[v_axis])
     assign(obj, mat)
+    # Give furniture and architectural edges a small highlight-catching radius.
+    # Tiny labels, keys, and blueprint sheets stay crisp and inexpensive.
+    if bevel is None and min(size) >= 0.08:
+        bevel = min(0.012, min(size) * 0.035)
     if bevel:
         mod = obj.modifiers.new("soft edges", "BEVEL")
         mod.width = bevel
-        mod.segments = 2
+        mod.segments = bevel_segments
         obj.modifiers.new("weighted corners", "WEIGHTED_NORMAL")
     return obj
 
@@ -136,7 +172,19 @@ def cylinder(name, pos, radius, depth, mat, vertices=20, rotation=None):
     return obj
 
 
-def sphere(name, pos, size, mat, segments=16, rings=8):
+def torus(name, pos, major_radius, minor_radius, mat, rotation=None):
+    bpy.ops.mesh.primitive_torus_add(major_segments=36, minor_segments=12,
+                                    major_radius=major_radius, minor_radius=minor_radius,
+                                    location=xyz(*pos), rotation=rotation or (0, 0, 0))
+    obj = bpy.context.object
+    obj.name = name
+    assign(obj, mat)
+    for polygon in obj.data.polygons:
+        polygon.use_smooth = True
+    return obj
+
+
+def sphere(name, pos, size, mat, segments=24, rings=16):
     bpy.ops.mesh.primitive_uv_sphere_add(segments=segments, ring_count=rings, location=xyz(*pos))
     obj = bpy.context.object
     obj.name = name
@@ -184,7 +232,7 @@ def image_plane(name, center, width, height, mat, horizontal=False, rotation=0):
     return obj
 
 
-def imported(slug, center, target_width):
+def imported(slug, center, target_width, rotation_z=0):
     path = SOURCE / "models" / slug / f"{slug}_1k.gltf"
     before = set(bpy.data.objects)
     bpy.ops.import_scene.gltf(filepath=str(path))
@@ -198,19 +246,53 @@ def imported(slug, center, target_width):
     high = Vector(tuple(max(v[i] for v in coords) for i in range(3)))
     span = max(high.x-low.x, high.y-low.y)
     scale = target_width / span if span else 1
-    offset = Vector(xyz(*center)) - Vector(((low.x+high.x)/2, (low.y+high.y)/2, low.z)) * scale
+    pivot = Vector(xyz(*center))
+    offset = pivot - Vector(((low.x+high.x)/2, (low.y+high.y)/2, low.z)) * scale
+    rotation = Matrix.Translation(pivot) @ Matrix.Rotation(rotation_z, 4, "Z") @ Matrix.Translation(-pivot)
+    transform = rotation @ Matrix.Translation(offset) @ Matrix.Scale(scale, 4)
     for obj in added:
         obj.name = f"{slug} / {obj.name}"
-        obj.scale *= scale
-        obj.location = obj.location * scale + offset
+        obj.matrix_world = transform @ obj.matrix_world
     bpy.context.view_layer.update()
 
 
 # Shell: a front-open loft with an oak mezzanine, not a painted backdrop.
 cube("concrete floor", (0,-0.14,-0.05), (12.4,0.28,9.7), concrete)
-cube("rear plaster wall", (0,3.15,-4.62), (12.4,6.3,0.22), plaster)
+# Three actual window bays let the exterior read as part of the room. Build the
+# rear wall from plaster sections around the openings instead of putting glass
+# in front of a continuous wall.
+rear_x_min, rear_x_max = -6.2, 6.2
+window_centers = (-4.5, -2.75, -1.0)
+window_width = 1.42
+window_bottom, window_top = 3.34, 5.90
+wall_front, wall_back = -4.73, -4.51
+wall_depth = wall_back - wall_front
+wall_center_z = (wall_front + wall_back) / 2
+cube("rear plaster lower wall", (0,window_bottom/2,wall_center_z),
+     (rear_x_max-rear_x_min,window_bottom,wall_depth),plaster)
+header_height = 6.3 - window_top
+cube("rear plaster window header", (0,window_top+header_height/2,wall_center_z),
+     (rear_x_max-rear_x_min,header_height,wall_depth),plaster)
+window_intervals = [(x-window_width/2,x+window_width/2) for x in window_centers]
+piers = []
+cursor = rear_x_min
+for left, right in window_intervals:
+    if left > cursor:
+        piers.append((cursor,left))
+    cursor = right
+if cursor < rear_x_max:
+    piers.append((cursor,rear_x_max))
+for index, (left, right) in enumerate(piers, start=1):
+    pier_width = right-left
+    cube(f"rear plaster window pier {index}", ((left+right)/2,
+         (window_bottom+window_top)/2,wall_center_z),
+         (pier_width,window_top-window_bottom,wall_depth),plaster)
 cube("left brick wall", (-6.16,3.15,-0.05), (0.22,6.3,9.7), brick)
 cube("right plaster wall", (6.16,3.15,-0.05), (0.22,6.3,9.7), plaster)
+# Narrow oak skirting closes the wall/floor seam and grounds the room.
+cube("rear wall oak skirting", (0,0.075,-4.43), (12.1,0.15,0.12), veneer)
+for x in (-6.02, 6.02):
+    cube("side wall oak skirting", (x,0.075,-0.05), (0.12,0.15,9.45), veneer)
 cube("ceiling", (0,6.28,-0.1), (12.4,0.24,9.6), dark)
 for x in (-5.65, -3.05, -0.45, 2.15, 4.75):
     cube("exposed ceiling beam", (x,5.91,-0.1), (0.2,0.36,9.45), veneer, 0.016)
@@ -221,69 +303,115 @@ for x in (-5.82, 5.82):
         cube("black steel post", (x,3.04,depth), (0.16,6.08,0.16), black, 0.015)
 
 # Window bays: layered dark framing and translucent light-catching panes.
-for index, x in enumerate((-4.5, -2.75, -1.0, 0.75, 2.5)):
-    if x > -1.0:
-        continue
-    cube("high window glass", (x,4.62,-4.47), (1.28,2.35,0.035), glass)
+for x in window_centers:
+    # One thin surface avoids layered faces that amplify transparency flicker.
+    image_plane("high window glass", (x,4.62,-4.47), 1.28, 2.35, glass)
     for side in (-0.68, 0.68):
         cube("window mullion", (x+side,4.62,-4.39), (0.075,2.53,0.09), black)
     for height in (3.34, 4.62, 5.89):
         cube("window transom", (x,height,-4.38), (1.48,0.075,0.09), black)
     cube("window sill", (x,3.31,-4.17), (1.55,0.07,0.43), concrete, 0.015)
 
-# Mezzanine over the left half of the room.
-cube("loft oak deck", (-3.84,3.13,-0.65), (4.48,0.26,7.65), oak, 0.02)
+# Mezzanine over the left half of the room. The open notch follows the top of
+# the browser staircase so the treads and handrail emerge at a finished
+# landing rather than passing through the deck.
+deck_y, deck_thickness = 3.13, 0.26
+deck_x_min, deck_x_max = -6.08, -1.60
+deck_z_min, deck_z_max = -4.475, 3.175
+stairwell_x_min, stairwell_x_max = -4.9, deck_x_max
+stairwell_z_min, stairwell_z_max = -2.65, 2.25
+cube("loft oak deck west panel", ((deck_x_min+stairwell_x_min)/2,deck_y,-0.65),
+     (stairwell_x_min-deck_x_min,deck_thickness,deck_z_max-deck_z_min),oak,0.02)
+for name, low_z, high_z in (("north",deck_z_min,stairwell_z_min),
+                            ("south",stairwell_z_max,deck_z_max)):
+    cube(f"loft oak deck {name} return", ((stairwell_x_min+deck_x_max)/2,deck_y,
+         (low_z+high_z)/2), (deck_x_max-stairwell_x_min,deck_thickness,high_z-low_z),oak,0.02)
+# The landing is flush with the mezzanine top and butts to its edge. Its lower
+# face stays just above the final tread, avoiding overlap while closing the
+# vertical gap left by the upper floor.
+cube("oak stair landing", (-1.01,3.13,-2.94), (1.18,0.26,0.92), oak,0.018)
 for x in (-5.87, -1.82):
     for depth in (-4.05, -1.05, 2.55):
-        leg_x = -2.78 if x == -1.82 and depth == -1.05 else x
-        cube("mezzanine leg", (leg_x,1.5,depth), (0.15,3.0,0.15), black)
+        leg_x = x
+        leg_depth = -3.15 if x == -1.82 and depth == -1.05 else depth
+        cube("mezzanine leg", (leg_x,1.5,leg_depth), (0.15,3.0,0.15), black)
 for x in (-5.84, -4.85, -3.86, -2.87, -1.86):
     cube("mezzanine oak fascia", (x,2.89,3.08), (0.8,0.12,0.1), veneer)
 # A recessed light line gives the underside of the mezzanine a readable edge.
 cube("mezzanine light channel", (-3.83,2.84,3.015), (3.82,0.035,0.045), black)
 cube("mezzanine warm light diffuser", (-3.83,2.84,3.049), (3.67,0.012,0.014), glow)
-for depth in (-4.12, -3.25, -2.38, -1.51, -0.64, 0.23, 1.10, 1.97, 2.84):
+for depth in (-4.12, -3.25, 2.84):
     tube("loft railing upright", (-1.58,3.24,depth), (-1.58,4.18,depth), 0.027, black)
-tube("loft railing top", (-1.58,4.18,-4.25), (-1.58,4.18,3.02), 0.045, black)
-tube("loft railing lower", (-1.58,3.57,-4.25), (-1.58,3.57,3.02), 0.025, black)
+for low_z, high_z in ((-4.25,stairwell_z_min),(stairwell_z_max,3.02)):
+    tube("loft railing top", (-1.58,4.18,low_z), (-1.58,4.18,high_z), 0.045, black)
+    tube("loft railing lower", (-1.58,3.57,low_z), (-1.58,3.57,high_z), 0.025, black)
 
-# Left-side staircase, the main silhouette of the scene.
-for i in range(12):
-    t = i/11
-    depth = 3.65 - 5.9*t
-    height = 0.19 + 2.72*t
-    cube("floating stair tread", (-5.35,height,depth), (1.12,0.12,0.43), oak, 0.015)
-    tube("stair side rail", (-4.72,height+0.15,depth), (-4.72,height+0.65,depth), 0.022, black)
-tube("ascending hand rail", (-4.72,0.86,3.65), (-4.72,3.56,-2.25), 0.04, black)
-tube("stair stringer", (-5.98,0.12,3.82), (-5.98,3.03,-2.38), 0.085, black)
+# Steel guardrails frame the exposed west edge of the stairwell notch.
+guardrail_y = 3.26
+guardrail_x = stairwell_x_min - 0.2
+for depth in (-2.55, -1.75, -0.95, -0.15, 0.65, 1.45, 2.05):
+    tube("stairwell guardrail upright", (guardrail_x,guardrail_y,depth),
+         (guardrail_x,guardrail_y+0.9,depth),0.026,black)
+tube("stairwell guardrail top", (guardrail_x,guardrail_y+0.9,stairwell_z_min),
+     (guardrail_x,guardrail_y+0.9,stairwell_z_max),0.043,black)
+tube("stairwell guardrail lower", (guardrail_x,guardrail_y+0.31,stairwell_z_min),
+     (guardrail_x,guardrail_y+0.31,stairwell_z_max),0.023,black)
 
-# A continuous, warm display shelf beneath the loft.
+# Left-side staircase, aligned with the browser's diagonal flight.
+stair_steps = []
+for i in range(15):
+    t = i/14
+    step_x = -4.2 + 2.8*t
+    height = 0.19 + 3.01*t
+    depth = 1.95 - 4.2*t
+    stair_steps.append((step_x,height,depth))
+    cube("floating stair tread", (step_x,height,depth), (1.26,0.12,0.46), oak, 0.018)
+    if i <= 12 and i % 2 == 0:
+        tube("stair side rail", (step_x+0.66,height+0.12,depth),
+             (step_x+0.66,height+0.72,depth), 0.022, black)
+first_step, last_step = stair_steps[0], stair_steps[-1]
+landing_rail_x = last_step[0] + 0.66
+landing_rail_y = last_step[1] + 0.72
+tube("ascending hand rail", (first_step[0]+0.66,first_step[1]+0.72,first_step[2]),
+     (landing_rail_x,landing_rail_y,-2.48), 0.038, black)
+tube("stair side rail", (landing_rail_x,3.26,-2.48),
+     (landing_rail_x,4.18,-2.48), 0.027, black)
+tube("stair stringer", (first_step[0]-0.67,first_step[1]-0.16,first_step[2]),
+     (last_step[0]-0.67,last_step[1]-0.16,last_step[2]), 0.075, black)
+
+# A compact, warm display shelf beneath the loft, clear of the computer desk.
 for height in (0.62, 1.43, 2.27):
-    cube("personal shelf", (-4.15,height,-2.67), (2.95,0.09,0.62), veneer, 0.02)
-for x in (-5.54, -2.74):
+    cube("personal shelf", (-4.72,height,-2.67), (2.08,0.09,0.62), veneer, 0.02)
+for x in (-5.72, -3.72):
     cube("shelf steel frame", (x,1.44,-2.67), (0.06,2.75,0.57), black)
 bookcloth = simple("muted book cloth", (0.19,0.26,0.27), 0.88)
 terracotta = simple("matte terracotta", (0.47,0.28,0.19), 0.84)
 leafgreen = simple("olive leaf", (0.13,0.24,0.17), 0.86)
 for row, height in enumerate((0.65,1.47,2.31)):
-    for index in range(4):
+    for index in range(3):
         thickness = 0.07 + (index % 3) * 0.018
-        cube("shelf book", (-5.30+index*0.11,height+0.16,-2.62),
+        cube("shelf book", (-5.47+index*0.11,height+0.16,-2.62),
              (thickness,0.27+((index+row)%3)*0.045,0.34),
              (bookcloth, cream, dark, terracotta)[(index+row)%4], 0.006)
-    cylinder("shelf ceramic vessel", (-4.33+row*0.13,height+0.14,-2.61), 0.115, 0.28, cream)
-    cube("shelf photo frame", (-3.38-row*0.1,height+0.19,-2.72),
+    cylinder("shelf ceramic vessel", (-4.78+row*0.08,height+0.14,-2.61), 0.105, 0.26, cream)
+    cube("shelf photo frame", (-4.27-row*0.08,height+0.19,-2.72),
          (0.39,0.34,0.055), black, 0.008)
-    cube("shelf photo mat", (-3.38-row*0.1,height+0.19,-2.68),
+    cube("shelf photo mat", (-4.27-row*0.08,height+0.19,-2.68),
          (0.31,0.26,0.005), cream)
 # A small plant gives the personal shelf a natural silhouette in the wide view.
-cylinder("plant ceramic pot", (-3.76,2.48,-2.57), 0.16, 0.28, terracotta, 20)
-cylinder("plant soil", (-3.76,2.63,-2.57), 0.145, 0.018, dark, 20)
-for angle in (0, math.pi/3, 2*math.pi/3, math.pi, 4*math.pi/3, 5*math.pi/3):
-    stem_x = -3.76 + 0.13*math.cos(angle)
-    stem_z = -2.57 + 0.13*math.sin(angle)
-    tube("plant stem", (-3.76,2.62,-2.57), (stem_x,2.93,stem_z), 0.011, leafgreen, 6)
-    leaf = sphere("plant leaf", (stem_x,2.95,stem_z), (0.085,0.17,0.035), leafgreen, 12, 6)
+cylinder("plant ceramic pot", (-3.96,2.48,-2.57), 0.15, 0.28, terracotta, 20)
+torus("plant pot lip", (-3.96,2.62,-2.57), 0.137, 0.014, terracotta)
+cylinder("plant soil", (-3.96,2.63,-2.57), 0.135, 0.018, dark, 20)
+for index in range(12):
+    angle = index * math.radians(137.5)
+    layer = index % 4
+    stem_x = -3.96 + (0.09 + 0.02 * (layer % 2)) * math.cos(angle)
+    stem_z = -2.57 + (0.09 + 0.02 * (layer % 2)) * math.sin(angle)
+    leaf_height = 2.68 + 0.025 * layer
+    tube("plant stem", (-3.96,2.62 + 0.018 * layer,-2.57),
+         (stem_x,leaf_height,stem_z), 0.009, leafgreen, 8)
+    leaf = sphere("plant leaf", (stem_x,leaf_height + 0.025,stem_z),
+                  (0.072,0.13,0.032), leafgreen, 24, 16)
     leaf.rotation_euler.z = angle
 
 # A run of slatted timber and a narrow dark reveal add depth behind the desk.
@@ -292,54 +420,116 @@ for x in (-2.94,-2.55,-2.16,-1.77,-1.38,-0.99,-0.60,-0.21):
     cube("desk wall timber slat", (x,1.55,-4.43), (0.055,2.82,0.07), oak, 0.009)
 cube("desk wall shadow reveal", (-1.54,0.12,-4.425), (3.15,0.055,0.08), black)
 
-# Central computer desk: a real monitor with a readable authored screen texture.
-cube("computer oak desk", (-1.72,0.81,-2.11), (3.35,0.12,1.46), oak, 0.035)
+# Central computer desk: a slim monitor with a readable authored screen texture.
+cube("computer oak desk", (-1.72,0.81,-2.11), (3.35,0.12,1.46), oak, 0.035, 4)
 for x in (-3.17,-0.28):
     for depth in (-2.71,-1.47):
         cube("computer desk leg", (x,0.39,depth), (0.09,0.79,0.09), black)
-cube("monitor stand foot", (-1.71,0.9,-2.41), (0.6,0.055,0.37), black, 0.025)
-cube("monitor stand neck", (-1.71,1.12,-2.4), (0.09,0.48,0.08), black)
-cube("large computer monitor", (-1.71,1.63,-2.43), (1.85,1.18,0.09), black, 0.04)
-image_plane("portfolio summary on screen", (-1.71,1.63,-2.365), 1.72,1.04,screenmat)
-cube("low profile keyboard", (-1.72,0.9,-1.66), (1.2,0.04,0.33), dark, 0.02)
-for i in range(11):
-    cube("keyboard key row", (-2.23+i*0.1,0.925,-1.66), (0.06,0.008,0.21), black, 0.003)
-cylinder("ceramic coffee cup", (-0.69,0.95,-1.75), 0.12, 0.21, cream)
+cube("monitor stand foot", (-1.71,0.9,-2.41), (0.58,0.045,0.34), monitor_alloy, 0.025, 5)
+cube("monitor stand neck", (-1.71,1.12,-2.4), (0.075,0.42,0.07), monitor_alloy, 0.024, 5)
+cylinder("monitor swivel hinge", (-1.71,1.31,-2.406), 0.051, 0.16, black, 36,
+         rotation=(0,math.pi/2,0))
+cube("large computer monitor", (-1.71,1.63,-2.43), (1.85,1.18,0.1), monitor_alloy, 0.04, 7)
+cube("monitor screen bezel", (-1.71,1.63,-2.382), (1.77,1.1,0.018), black, 0.018, 5)
+image_plane("portfolio summary on screen", (-1.71,1.63,-2.37), 1.69,1.02,screenmat)
+# Small hardware details sit in the display's bezel, outside the active screen.
+cylinder("monitor webcam lens", (-1.71,2.174,-2.367), 0.011, 0.008, dark, 32,
+         rotation=(math.pi/2,0,0))
+cylinder("monitor webcam glint", (-1.71,2.174,-2.362), 0.004, 0.004, brass, 24,
+         rotation=(math.pi/2,0,0))
+cylinder("monitor power indicator", (-0.925,1.113,-2.362), 0.007, 0.004, glow, 24,
+         rotation=(math.pi/2,0,0))
+cube("low profile keyboard", (-1.77,0.895,-1.9), (1.27,0.035,0.37), dark, 0.014, 3)
+for row in range(4):
+    key_count = 14 if row < 3 else 12
+    for column in range(key_count):
+        x = -2.35 + column * (1.16 / (key_count - 1))
+        z = -2.03 + row * 0.082
+        cube("individual keyboard key", (x,0.921,z), (0.061,0.016,0.061), black, 0.006, 3)
+cube("keyboard space bar", (-1.77,0.922,-1.7), (0.38,0.016,0.055), black, 0.006, 3)
+# A curved wireless mouse and wheel make the computer setup read as a working desk.
+sphere("wireless mouse", (-0.94,0.906,-1.88), (0.13,0.07,0.19), dark, 24, 16)
+tube("mouse center seam", (-0.94,0.937,-1.96), (-0.94,0.937,-1.79), 0.004, black, 8)
+cylinder("mouse scroll wheel", (-0.94,0.944,-1.82), 0.018, 0.045, black, 16, rotation=(math.pi/2,0,0))
+# A glazed mug with a visible coffee surface, ceramic rim, handle, and saucer.
+cylinder("coffee saucer", (-0.52,0.881,-1.88), 0.16, 0.018, cream, 36)
+cylinder("ceramic coffee mug", (-0.52,0.989,-1.88), 0.112, 0.2, cream, 36)
+torus("mug ceramic rim", (-0.52,1.088,-1.88), 0.105, 0.008, cream)
+cylinder("coffee surface", (-0.52,1.078,-1.88), 0.092, 0.004, dark, 32)
+torus("mug handle", (-0.38,0.99,-1.88), 0.061, 0.012, cream, rotation=(math.pi/2,0,0))
 
-# Personality objects within reach of the desk.
-cube("camcorder body", (-2.92,0.96,-1.65), (0.31,0.21,0.22), black, 0.027)
-cylinder("camcorder lens", (-2.73,0.97,-1.65), 0.09, 0.17, dark, rotation=(0,math.pi/2,0))
-cube("camcorder handle", (-2.98,1.12,-1.65), (0.22,0.035,0.07), black)
-cube("camcorder flip screen", (-3.14,1.03,-1.65), (0.03,0.21,0.2), dark)
-for i in range(14):
-    ang = math.pi*(i/13)
-    a = (-1.0+0.22*math.cos(ang),0.96+0.24*math.sin(ang),-1.58)
-    b = (-1.0+0.22*math.cos(ang+math.pi/13),0.96+0.24*math.sin(ang+math.pi/13),-1.58)
-    tube("headphone arch", a,b,0.024,black)
-for x in (-1.22,-0.78):
-    cube("headphone ear cup", (x,0.96,-1.58), (0.12,0.19,0.13), dark, 0.025)
-cube("handwritten recipe notebook", (-2.37,0.9,-1.39), (0.34,0.018,0.24), cream, 0.012)
-tube("recipe pencil", (-2.53,0.94,-1.4), (-2.24,0.94,-1.41),0.009,brass)
+# A detailed, textured video camera replaces the handmade boxy prop.
+imported("vintage_video_camera", (-3.06,0.87,-2.25), 0.30)
+# Over-ear headphones sit on a small desktop stand instead of intersecting the desk.
+headphone_center_x, headphone_center_z = -0.43, -2.47
+cylinder("headphone stand base", (headphone_center_x,0.89,headphone_center_z), 0.12, 0.04, black, 32)
+tube("headphone stand stem", (headphone_center_x,0.91,headphone_center_z),
+     (headphone_center_x,1.16,headphone_center_z), 0.016, brass)
+tube("headphone stand cradle", (-0.49,1.16,headphone_center_z),
+     (-0.37,1.16,headphone_center_z), 0.014, black)
+headband = bpy.data.curves.new("headphone padded headband", "CURVE")
+headband.dimensions = "3D"
+headband.resolution_u = 24
+headband.bevel_depth = 0.031
+headband.bevel_resolution = 5
+headband_path = headband.splines.new("POLY")
+headband_path.points.add(32)
+for i, point in enumerate(headband_path.points):
+    angle = math.pi - math.pi * i / 32
+    point.co = (*xyz(headphone_center_x + 0.19 * math.cos(angle),
+                     1.16 + 0.27 * math.sin(angle), headphone_center_z), 1)
+headband_obj = bpy.data.objects.new("headphone padded headband", headband)
+bpy.context.collection.objects.link(headband_obj)
+assign(headband_obj, black)
+for index, x in enumerate((headphone_center_x - 0.185, headphone_center_x + 0.185), 1):
+    sphere(f"headphone ear cup shell {index}", (x,1.16,headphone_center_z),
+           (0.11,0.085,0.061), black, 32, 20)
+    cylinder(f"headphone ear cup cushion {index}", (x,1.16,headphone_center_z + 0.032),
+             0.061,0.026,dark,48,rotation=(math.pi/2,0,0))
+    torus(f"headphone cushion piping {index}", (x,1.16,headphone_center_z + 0.049),
+          0.054,0.012,black,rotation=(math.pi/2,0,0))
+    cylinder(f"headphone speaker grille {index}", (x,1.16,headphone_center_z + 0.052),
+             0.036,0.009,black,40,rotation=(math.pi/2,0,0))
+    tube(f"headphone yoke {index}",
+         (x,1.18,headphone_center_z),(headphone_center_x + (-0.14 if index == 1 else 0.14),1.23,headphone_center_z),
+         0.012,brass,12)
+cube("handwritten recipe notebook", (-3.05,0.879,-1.68), (0.34,0.018,0.24), cream, 0.012)
+cube("recipe notebook page", (-3.05,0.889,-1.68), (0.31,0.003,0.21), dark, 0.004)
+for line in range(3):
+    tube("recipe pencil note", (-3.16,0.892,-1.62+line*0.045),
+         (-2.98,0.892,-1.62+line*0.045),0.0025,brass,6)
+tube("recipe pencil", (-3.21,0.897,-1.79), (-2.90,0.897,-1.81),0.009,brass)
 
 # Workbench takes the foreground. Each sheet remains a separate clickable mesh.
-cube("oak workbench top", (2.28,0.91,1.04), (5.45,0.17,2.77), oak, 0.035)
+cube("oak workbench top", (2.28,0.91,1.04), (5.45,0.17,2.77), oak, 0.04, 4)
 for x in (-0.15,4.72):
     for depth in (-0.12,2.15):
         cube("workbench steel leg", (x,0.43,depth), (0.12,0.85,0.12), black)
 cube("workbench back rail", (2.28,0.62,-0.15), (4.85,0.075,0.07), black)
+# A timber apron and three shallow drawer fronts give the bench a finished
+# furniture silhouette while keeping every blueprint area unobstructed.
+cube("workbench front apron", (2.28,0.70,2.34), (4.86,0.27,0.10), veneer)
+cube("workbench left apron", (-0.09,0.70,1.02), (0.10,0.27,2.35), veneer)
+cube("workbench right apron", (4.65,0.70,1.02), (0.10,0.27,2.35), veneer)
+for i, x in enumerate((0.63,2.28,3.93),1):
+    cube(f"workbench drawer face {i}", (x,0.73,2.402), (1.45,0.16,0.035), oak, 0.018, 4)
+    cube(f"workbench drawer pull plate {i}", (x,0.73,2.427), (0.16,0.055,0.012), black, 0.01, 3)
+    tube(f"workbench drawer pull {i}", (x-0.055,0.73,2.447),(x+0.055,0.73,2.447),0.009,brass,12)
 for i,(x,z,angle) in enumerate(((0.86,0.72,-0.08),(2.48,0.93,0.09),(3.78,1.41,-0.065)),1):
-    paper = cube(f"project {i} blueprint paper", (x,1.025,z), (1.53,0.025,1.09), blue, 0.008)
+    # A stiff, slightly deckled stock catches light at the edge; the printed
+    # drawing sits just above it to avoid z-fighting in the browser renderer.
+    paper = cube(f"project {i} blueprint paper", (x,1.003,z), (1.53,0.004,1.09), blue, 0.001, 3)
     paper.rotation_euler.z = -angle
-    image_plane(f"project {i} blueprint artwork", (x,1.042,z),1.46,1.02,sheetmats[i-1],horizontal=True,rotation=angle)
+    image_plane(f"project {i} blueprint artwork", (x,1.007,z),1.46,1.02,sheetmats[i-1],horizontal=True,rotation=angle)
 for x,z in ((0.23,1.62),(3.1,0.11),(4.34,2.02)):
-    cylinder("brass drawing weight", (x,1.07,z),0.043,0.075,brass)
-tube("architect ruler", (0.55,1.05,2.12),(1.93,1.05,2.12),0.018,brass)
-cube("closed sample book", (4.13,1.02,0.12),(0.57,0.06,0.48),cream,0.014)
+    cylinder("brass drawing weight", (x,1.0335,z),0.043,0.075,brass)
+tube("architect ruler", (0.55,1.014,2.12),(1.93,1.014,2.12),0.018,brass)
+cube("closed sample book", (4.13,1.03,0.12),(0.57,0.06,0.48),cream,0.014)
 # A shallow tool tray makes the table read as a used workspace without
 # crossing the blueprint hit areas in the overhead project view.
-cube("workbench tool tray", (0.27,1.04,-0.02), (0.7,0.045,0.31), black, 0.012)
+cube("workbench tool tray", (0.27,1.0185,-0.02), (0.7,0.045,0.31), black, 0.012)
 for x in (0.10,0.24,0.38):
-    tube("drafting pen", (x,1.08,-0.13), (x,1.08,0.08), 0.009, brass, 8)
+    tube("drafting pen", (x,1.05,-0.13), (x,1.05,0.08), 0.009, brass, 8)
 
 # Experience display on the right rear wall, bordered in dark metal.
 cube("experience display frame", (2.74,2.63,-4.27), (3.14,2.2,0.12), black, 0.028)
@@ -375,7 +565,7 @@ for i in range(3):
 
 # Imported detailed CC0 assets are integrated into the authored architecture.
 imported("desk_lamp_arm_01", (0.0,1.02,-0.13), 0.68)
-imported("modern_arm_chair_01", (-1.74,0.0,-0.55), 1.03)
+imported("modern_arm_chair_01", (-1.82,0.0,-0.58), 0.95, rotation_z=math.pi)
 imported("american_football", (-3.75,1.53,-2.62), 0.33)
 
 # The imported props and roughness masks are tiny in the room view. Keep the
@@ -386,7 +576,7 @@ for image in bpy.data.images:
     if image.source != "FILE":
         continue
     name = image.name.lower()
-    prop = any(part in name for part in ("american_football", "desk_lamp_arm_01", "modern_arm_chair_01"))
+    prop = any(part in name for part in ("american_football", "desk_lamp_arm_01", "modern_arm_chair_01", "vintage_video_camera"))
     roughness = "rough" in name or "_arm" in name
     if prop or roughness:
         if image.size[0] > 512 or image.size[1] > 512:

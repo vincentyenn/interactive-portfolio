@@ -14,7 +14,8 @@
     "gsap": "^3.15.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
-    "three": "^0.186.0"
+    "three": "^0.186.0",
+    "threepipe": "^0.5.1"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
@@ -24,5 +25,10 @@
     "@vitejs/plugin-react": "^6.1.1",
     "typescript": "^7.0.2",
     "vite": "^8.3.0"
+  },
+  "overrides": {
+    "threepipe": {
+      "@types/three": "$@types/three"
+    }
   }
 }
