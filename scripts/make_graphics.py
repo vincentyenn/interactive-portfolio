@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-import math
+import sys
 from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
@@ -27,65 +27,232 @@ def font(size: int, kind: str = "regular") -> ImageFont.FreeTypeFont:
         return ImageFont.load_default()
 
 
-def line_grid(draw: ImageDraw.ImageDraw, width: int, height: int, spacing: int, color: tuple[int, int, int]) -> None:
-    for x in range(0, width + 1, spacing):
-        draw.line((x, 0, x, height), fill=color, width=1)
-    for y in range(0, height + 1, spacing):
-        draw.line((0, y, width, y), fill=color, width=1)
-
-
 def blueprint(project: dict, number: int) -> None:
-    width, height = 1200, 880
-    im = Image.new("RGB", (width, height), (21, 48, 59))
+    width, height = 1800, 1260
+    paper = Image.new("RGB", (width, height), (18, 39, 47))
+    grain = Image.effect_noise((width, height), 13).convert("RGB")
+    im = Image.blend(paper, grain, 0.035)
     d = ImageDraw.Draw(im)
-    line_grid(d, width, height, 44, (36, 69, 79))
-    d.rectangle((30, 30, width - 30, height - 30), outline=(121, 163, 169), width=3)
-    d.line((30, 660, width - 30, 660), fill=(121, 163, 169), width=3)
-    d.line((780, 660, 780, height - 30), fill=(121, 163, 169), width=3)
-    d.text((62, 55), f"PROJECT / 0{number}", font=font(27, "mono"), fill=(201, 224, 220))
-    d.text((62, 675), project["title"].upper(), font=font(49, "bold"), fill=(239, 239, 220))
-    d.text((65, 754), project["category"].upper(), font=font(25, "mono"), fill=(172, 195, 196))
-    d.text((810, 680), "VINCENT YEN", font=font(29, "mono"), fill=(239, 239, 220))
-    d.text((810, 736), f"{project['year']} / {project['status'].upper()}", font=font(23, "mono"), fill=(172, 195, 196))
-    d.text((810, 796), f"SHEET {number} OF {len(DATA['projects'])}", font=font(21, "mono"), fill=(172, 195, 196))
-    cx, cy = 550, 365
-    pale = (158, 205, 205)
-    strong = (229, 240, 222)
-    orange = (222, 147, 96)
+    minor, major = (29, 58, 66), (39, 72, 79)
+    for x in range(48, width - 48, 24):
+        is_major = (x - 48) % 120 == 0
+        d.line((x, 48, x, height - 48), fill=major if is_major else minor, width=2 if is_major else 1)
+    for y in range(48, height - 48, 24):
+        is_major = (y - 48) % 120 == 0
+        d.line((48, y, width - 48, y), fill=major if is_major else minor, width=2 if is_major else 1)
+
+    ink = (151, 197, 201)
+    bright = (221, 232, 221)
+    muted = (108, 155, 164)
+    amber = (216, 147, 98)
+    faint = (79, 126, 136)
+
+    # Sheet edges, registration marks and a restrained architectural title block.
+    d.rectangle((38, 38, width - 38, height - 38), outline=ink, width=3)
+    d.rectangle((53, 53, width - 53, height - 53), outline=faint, width=1)
+    d.line((76, 132, width - 76, 132), fill=ink, width=2)
+    d.text((82, 77), "V / Y     DESIGN WORKSHOP", font=font(22, "mono"), fill=bright)
+    d.text((width - 515, 79), f"DRAWING  /  2026.0{number}", font=font(20, "mono"), fill=ink)
+    for x, y in ((38, 38), (width - 38, 38), (38, height - 38), (width - 38, height - 38)):
+        d.line((x - 15, y, x + 15, y), fill=amber, width=2)
+        d.line((x, y - 15, x, y + 15), fill=amber, width=2)
+
+    # Drawing field and right-hand annotation strip.
+    d.line((1350, 165, 1350, 920), fill=faint, width=2)
+    d.text((1420, 176), "REFERENCE / NOTES", font=font(18, "mono"), fill=amber)
+    d.text((1420, 222), f"SHEET 0{number}   ·   1:{number * 10}", font=font(15, "mono"), fill=ink)
+    d.line((1407, 260, 1710, 260), fill=faint, width=1)
+    note_rows = ["LAYOUT STUDY", "INTERACTION MAP", "COMPONENT VIEW"]
+    for i, row in enumerate(note_rows):
+        y = 716 + i * 54
+        d.ellipse((1418, y + 3, 1432, y + 17), outline=amber if i == number - 1 else ink, width=2)
+        d.text((1450, y), row, font=font(13, "mono"), fill=bright if i == number - 1 else muted)
+
+    def label(x: int, y: int, text: str, size: int = 15, color=ink) -> None:
+        d.text((x, y), text, font=font(size, "mono"), fill=color)
+
+    def dim_h(x1: int, x2: int, y: int, text: str) -> None:
+        d.line((x1, y, x2, y), fill=muted, width=2)
+        d.line((x1, y - 13, x1, y + 13), fill=muted, width=2)
+        d.line((x2, y - 13, x2, y + 13), fill=muted, width=2)
+        d.polygon(((x1, y), (x1 + 12, y - 5), (x1 + 12, y + 5)), fill=muted)
+        d.polygon(((x2, y), (x2 - 12, y - 5), (x2 - 12, y + 5)), fill=muted)
+        box = d.textbbox((0, 0), text, font=font(15, "mono"))
+        tx = (x1 + x2 - (box[2] - box[0])) / 2
+        d.rectangle((tx - 8, y - 24, tx + box[2] - box[0] + 8, y - 2), fill=(18, 39, 47))
+        d.text((tx, y - 25), text, font=font(15, "mono"), fill=ink)
+
+    def dim_v(x: int, y1: int, y2: int, text: str) -> None:
+        d.line((x, y1, x, y2), fill=muted, width=2)
+        d.line((x - 13, y1, x + 13, y1), fill=muted, width=2)
+        d.line((x - 13, y2, x + 13, y2), fill=muted, width=2)
+        d.polygon(((x, y1), (x - 5, y1 + 12), (x + 5, y1 + 12)), fill=muted)
+        d.polygon(((x, y2), (x - 5, y2 - 12), (x + 5, y2 - 12)), fill=muted)
+        label(x + 17, (y1 + y2) // 2 - 9, text, 14)
+
+    def rule(x1: int, y1: int, x2: int, y2: int, color=ink, thick: int = 3) -> None:
+        d.line((x1, y1, x2, y2), fill=color, width=thick)
+
     if number == 1:
-        d.rounded_rectangle((255, 165, 815, 545), radius=13, outline=strong, width=5)
-        d.line((255, 235, 815, 235), fill=pale, width=3)
-        for x in (286, 310, 334):
-            d.ellipse((x, 191, x + 12, 203), outline=orange, width=3)
-        d.rectangle((292, 276, 493, 503), outline=pale, width=3)
-        for y in (299, 331, 363, 395):
-            d.line((313, y, 465, y), fill=pale, width=2)
-        d.rectangle((530, 278, 772, 377), outline=pale, width=3)
-        d.rectangle((530, 401, 645, 503), outline=pale, width=3)
-        d.rectangle((663, 401, 772, 503), outline=pale, width=3)
+        # Portfolio home: browser elevation, editorial rail and project-card grid.
+        x0, y0, x1, y1 = 190, 220, 1240, 770
+        d.rounded_rectangle((x0, y0, x1, y1), radius=12, outline=bright, width=4)
+        d.line((x0, y0 + 62, x1, y0 + 62), fill=ink, width=2)
+        for x in (x0 + 28, x0 + 53, x0 + 78):
+            d.ellipse((x, y0 + 24, x + 10, y0 + 34), outline=amber, width=2)
+        label(x0 + 120, y0 + 18, "VY / LIBRARY", 16, bright)
+        label(x0 + 650, y0 + 21, "WORK     ABOUT     CONTACT", 13)
+        # Hero column and a framed image/feature column.
+        label(x0 + 56, y0 + 120, "01  /  HOME", 13, amber)
+        d.text((x0 + 56, y0 + 165), "Vincent", font=font(49, "bold"), fill=bright)
+        d.text((x0 + 56, y0 + 220), "Yen", font=font(49, "bold"), fill=bright)
+        rule(x0 + 56, y0 + 300, x0 + 565, y0 + 300, faint, 2)
+        for row, length in enumerate((450, 390, 420, 285)):
+            rule(x0 + 56, y0 + 330 + row * 26, x0 + 56 + length, y0 + 330 + row * 26, ink, 2)
+        d.rectangle((x0 + 642, y0 + 112, x0 + 992, y0 + 346), outline=ink, width=3)
+        d.rectangle((x0 + 658, y0 + 128, x0 + 976, y0 + 330), outline=faint, width=1)
+        # Camera frame and horizon lines suggest the portfolio's visual-work panel.
+        rule(x0 + 680, y0 + 296, x0 + 954, y0 + 296, muted, 2)
+        rule(x0 + 680, y0 + 174, x0 + 680, y0 + 296, faint, 2)
+        rule(x0 + 954, y0 + 174, x0 + 954, y0 + 296, faint, 2)
+        d.ellipse((x0 + 775, y0 + 185, x0 + 855, y0 + 265), outline=amber, width=3)
+        label(x0 + 662, y0 + 358, "FEATURE / VISUAL STORY", 12, amber)
+        # Lower project index.
+        rule(x0 + 56, y0 + 395, x1 - 56, y0 + 395, faint, 2)
+        for i, x in enumerate((x0 + 56, x0 + 350, x0 + 644)):
+            d.rectangle((x, y0 + 424, x + 270, y0 + 510), outline=ink, width=2)
+            label(x + 13, y0 + 438, f"0{i + 1}  /  PROJECT", 12, amber)
+            rule(x + 13, y0 + 472, x + 240, y0 + 472, muted, 2)
+            rule(x + 13, y0 + 490, x + 174, y0 + 490, faint, 2)
+        dim_h(x0, x1, 195, "DESKTOP VIEW  /  1440")
+        dim_v(155, y0, y1, "760")
+        label(236, 802, "ELEVATION A — HOME / PORTFOLIO LIBRARY", 15, bright)
+        label(1010, 802, "GRID  /  12 COL", 13, amber)
+        # Component inset.
+        d.rectangle((1410, 302, 1698, 580), outline=ink, width=2)
+        label(1430, 322, "NAV / COMPONENT", 13, bright)
+        for i, y in enumerate((368, 412, 456, 500)):
+            d.rectangle((1430, y, 1678, y + 28), outline=faint, width=1)
+            label(1442, y + 5, ("HEADER", "LIBRARY CARD", "DETAIL VIEW", "CONTACT LINK")[i], 12)
+        rule(1550, 368, 1550, 528, amber, 2)
+        dim_h(1430, 1678, 563, "AUTO / FLUID")
+
     elif number == 2:
-        for i, x in enumerate((275, 425, 575)):
-            d.rectangle((x, 205 + i * 22, x + 125, 505 - i * 14), outline=strong, width=4)
-            d.line((x + 24, 235 + i * 22, x + 100, 235 + i * 22), fill=pale, width=3)
-            d.line((x + 24, 267 + i * 22, x + 100, 267 + i * 22), fill=pale, width=3)
-        d.line((205, 545, 855, 545), fill=pale, width=4)
-        for x, y in ((220, 448), (790, 215), (858, 403)):
-            d.ellipse((x-23, y-23, x+23, y+23), outline=orange, width=4)
+        # Coursework archive: index shelves, linked records and document folios.
+        label(196, 192, "PLAN B  /  ARCHIVE INDEX", 15, amber)
+        x0, y0, x1, y1 = 215, 250, 1255, 775
+        d.rectangle((x0, y0, x1, y1), outline=bright, width=4)
+        d.line((x0, y0 + 58, x1, y0 + 58), fill=ink, width=2)
+        label(x0 + 24, y0 + 17, "COURSEWORK / SELECTED FILES", 16, bright)
+        label(x1 - 260, y0 + 19, "SORT: SUBJECT  ↕", 12)
+        # Three archive columns with spine marks and card rails.
+        column_xs = (x0 + 28, x0 + 365, x0 + 702)
+        for col, x in enumerate(column_xs):
+            d.rectangle((x, y0 + 86, x + 308, y0 + 474), outline=ink, width=2)
+            label(x + 16, y0 + 102, f"FOLDER  /  0{col + 1}", 12, amber)
+            for row in range(5):
+                yy = y0 + 146 + row * 59
+                d.rounded_rectangle((x + 15, yy, x + 293, yy + 44), radius=3, outline=faint, width=1)
+                d.rectangle((x + 26, yy + 8, x + 53, yy + 35), outline=ink, width=1)
+                rule(x + 68, yy + 12, x + 268 - (row % 2) * 45, yy + 12, ink, 2)
+                rule(x + 68, yy + 28, x + 205, yy + 28, faint, 2)
+        # Record relationship lines and numbered review marks.
+        for y in (y0 + 184, y0 + 302, y0 + 420):
+            rule(x0 + 336, y, x0 + 365, y, amber, 2)
+            rule(x0 + 673, y, x0 + 702, y, amber, 2)
+        for i, point in enumerate(((x0 + 338, y0 + 184), (x0 + 675, y0 + 302), (x0 + 338, y0 + 420)), 1):
+            x, y = point
+            d.ellipse((x - 12, y - 12, x + 12, y + 12), outline=amber, width=2)
+            label(x - 5, y - 8, str(i), 10, bright)
+        dim_h(x0, x1, 226, "ARCHIVE GRID  /  3 INDEX GROUPS")
+        dim_v(175, y0, y1, "760")
+        label(236, 808, "PLAN A — COURSEWORK CATALOG / RECORD RELATIONSHIPS", 15, bright)
+        # Right-hand legend gives the sheet the feel of a working drawing.
+        d.rectangle((1410, 302, 1698, 600), outline=ink, width=2)
+        label(1430, 322, "INDEX KEY", 13, bright)
+        for i, (word, swatch) in enumerate((("PROJECT", ink), ("COURSE", amber), ("SKILL", muted))):
+            y = 378 + i * 50
+            d.rectangle((1434, y, 1455, y + 17), outline=swatch, width=2)
+            label(1470, y - 2, word, 12)
+        rule(1430, 540, 1678, 540, faint, 1)
+        label(1430, 557, "FILTER / SUBJECT · YEAR", 12, amber)
+
     else:
-        for radius in (83, 147, 215):
-            d.arc((cx-radius, cy-radius, cx+radius, cy+radius), 215, 540, fill=pale, width=4)
-        d.ellipse((cx-33, cy-33, cx+33, cy+33), outline=orange, width=5)
-        for ang in (0.25, 2.25, 4.4):
-            x = cx + 250 * math.cos(ang)
-            y = cy + 205 * math.sin(ang)
-            d.rectangle((x-75, y-35, x+75, y+35), outline=strong, width=3)
-            d.line((x-45, y, x+45, y), fill=pale, width=2)
-    d.line((65, 610, 1135, 610), fill=(73, 117, 124), width=2)
-    im.save(OUT / f"blueprint_{number}.jpg", quality=92)
+        # Interface studies: matched desktop, tablet and phone elevations.
+        label(196, 192, "STUDY C  /  RESPONSIVE INTERACTION", 15, amber)
+        dims = ((200, 310, 630, 595, "DESKTOP"), (730, 355, 1050, 595, "TABLET"), (1130, 395, 1260, 595, "PHONE"))
+        for i, (x0, y0, x1, y1, title) in enumerate(dims):
+            d.rounded_rectangle((x0, y0, x1, y1), radius=17 if i < 2 else 26, outline=bright, width=4)
+            d.line((x0, y0 + 40, x1, y0 + 40), fill=ink, width=2)
+            d.ellipse(((x0 + x1) // 2 - 5, y0 + 15, (x0 + x1) // 2 + 5, y0 + 25), outline=muted, width=2)
+            label(x0 + 16, y0 - 34, title, 12, amber)
+            inner = x1 - x0 - 30
+            # A variable column layout shows how the same content reflows.
+            d.rectangle((x0 + 15, y0 + 55, x1 - 15, y0 + 99), outline=ink, width=1)
+            label(x0 + 24, y0 + 67, "NAV / CONTENT", 10)
+            if i == 0:
+                d.rectangle((x0 + 18, y0 + 115, x0 + 150, y1 - 18), outline=faint, width=2)
+                d.rectangle((x0 + 162, y0 + 115, x1 - 18, y0 + 266), outline=ink, width=2)
+                for row in range(4):
+                    yy = y0 + 130 + row * 31
+                    rule(x0 + 30, yy, x0 + 138, yy, muted, 2)
+                for col in range(2):
+                    xx = x0 + 174 + col * 112
+                    d.rectangle((xx, y0 + 130, xx + 94, y0 + 245), outline=faint, width=1)
+                    rule(xx + 10, y0 + 224, xx + 83, y0 + 224, ink, 2)
+                rule(x0 + 162, y0 + 254, x1 - 18, y0 + 254, amber, 2)
+            elif i == 1:
+                d.rectangle((x0 + 16, y0 + 112, x1 - 16, y0 + 168), outline=ink, width=2)
+                for col in range(2):
+                    xx = x0 + 20 + col * (inner // 2)
+                    d.rectangle((xx, y0 + 176, xx + inner // 2 - 8, y0 + 222), outline=faint, width=1)
+                rule(x0 + 17, y0 + 226, x1 - 17, y0 + 226, amber, 2)
+            else:
+                for row in range(3):
+                    yy = y0 + 107 + row * 31
+                    d.rectangle((x0 + 13, yy, x1 - 13, yy + 22), outline=muted if row else ink, width=1)
+        # Interaction path and breakpoints between the three studies.
+        for x0, x1, y in ((630, 730, 480), (1050, 1130, 480)):
+            d.line((x0 + 10, y, x1 - 10, y), fill=amber, width=2)
+            d.polygon(((x1 - 10, y), (x1 - 23, y - 6), (x1 - 23, y + 6)), fill=amber)
+        dim_h(200, 1260, 250, "RESPONSIVE RANGE  /  390 — 1440")
+        dim_v(160, 310, 595, "STUDY")
+        label(236, 808, "ELEVATION C — COMPONENT SCALE / INTERACTION FLOW", 15, bright)
+        d.rectangle((1410, 302, 1698, 600), outline=ink, width=2)
+        label(1430, 322, "BREAKPOINTS", 13, bright)
+        for i, word in enumerate(("01  /  REORDER", "02  /  COLLAPSE", "03  /  STACK")):
+            y = 378 + i * 50
+            d.ellipse((1436, y + 3, 1450, y + 17), outline=amber, width=2)
+            label(1470, y, word, 12)
+        rule(1430, 540, 1678, 540, faint, 1)
+        label(1430, 557, "FLOW / POINTER · TOUCH", 12, amber)
+
+    # Title block, revision cell and scale bar.
+    d.line((76, 864, width - 76, 864), fill=ink, width=2)
+    d.line((1280, 864, 1280, height - 76), fill=ink, width=2)
+    d.text((90, 894), project["title"].upper(), font=font(45, "bold"), fill=bright)
+    d.text((92, 956), project["category"].upper(), font=font(18, "mono"), fill=ink)
+    d.text((92, 1002), project["summary"], font=font(16, "regular"), fill=muted)
+    label(1310, 894, "AUTHOR / VINCENT YEN", 16, bright)
+    label(1310, 936, f"ISSUED / {project['year']}     STATUS / {project['status'].upper()}", 13)
+    label(1310, 978, f"SHEET / 0{number} OF 0{len(DATA['projects'])}", 14, amber)
+    label(1310, 1020, "REV  /  A      UNITS / PX", 13)
+    d.rectangle((1310, 1060, 1692, 1178), outline=faint, width=1)
+    label(1330, 1078, "PORTFOLIO SYSTEM", 13, bright)
+    label(1330, 1112, "DESIGN STUDY / 2026", 12)
+    for i in range(6):
+        x = 95 + i * 34
+        d.line((x, 1087, x + 24, 1087), fill=bright if i % 2 == 0 else muted, width=3)
+        d.line((x, 1087, x, 1100), fill=ink, width=1)
+    label(95, 1110, "SCALE BAR  /  NOT TO SCALE", 11, muted)
+    im.save(OUT / f"blueprint_{number}.jpg", quality=94, subsampling=0)
 
 
 for i, project in enumerate(DATA["projects"], start=1):
     blueprint(project, i)
+
+if "--blueprints-only" in sys.argv:
+    raise SystemExit(0)
 
 screen = Image.new("RGB", (1280, 800), (16, 26, 28))
 d = ImageDraw.Draw(screen)
@@ -107,15 +274,37 @@ screen.save(OUT / "computer_screen.jpg", quality=94)
 
 board = Image.new("RGB", (1400, 920), (31, 35, 34))
 d = ImageDraw.Draw(board)
-d.rectangle((45, 45, 1355, 875), outline=(129, 126, 111), width=4)
-d.text((93, 92), "EXPERIENCE", font=font(91, "bold"), fill=(234, 229, 212))
-d.line((95, 247, 1305, 247), fill=(178, 132, 90), width=4)
+d.rectangle((45, 45, 1355, 875), outline=(107, 115, 104), width=2)
+d.text((91, 76), "FIELD NOTES", font=font(33, "bold"), fill=(235, 230, 214))
+d.text((1013, 86), "V / Y     ARCHIVE 03", font=font(20, "mono"), fill=(164, 172, 157))
+d.line((91, 137, 1309, 137), fill=(169, 126, 83), width=3)
+d.text((94, 165), "SELECTED ROLES  /  2023—2026", font=font(19, "mono"), fill=(169, 151, 119))
+timeline_x = 344
+d.line((timeline_x, 249, timeline_x, 766), fill=(83, 96, 84), width=3)
 for row, role in enumerate(DATA["experience"]):
-    y = 304 + row * 255
-    d.text((105, y), role["period"].upper(), font=font(27, "mono"), fill=(178, 151, 116))
-    d.text((105, y + 57), role["company"].upper(), font=font(50, "bold"), fill=(235, 232, 218))
-    d.text((105, y + 132), role["role"].upper(), font=font(29, "mono"), fill=(175, 184, 176))
-    d.line((106, y + 208, 1301, y + 208), fill=(76, 85, 80), width=2)
+    y = 268 + row * 255
+    d.text((98, y + 4), role["period"].upper(), font=font(21, "mono"), fill=(184, 145, 102))
+    d.ellipse((timeline_x - 8, y + 8, timeline_x + 8, y + 24), fill=(212, 157, 103))
+    d.text((391, y), role["company"].upper(), font=font(39, "bold"), fill=(235, 232, 218))
+    d.text((393, y + 54), role["role"], font=font(23, "mono"), fill=(192, 194, 177))
+    summary = role.get("summary", "")
+    words = summary.split()
+    lines = []
+    current = ""
+    for word in words:
+        candidate = f"{current} {word}".strip()
+        if d.textlength(candidate, font=font(19)) > 840 and current:
+            lines.append(current)
+            current = word
+        else:
+            current = candidate
+    if current:
+        lines.append(current)
+    for line_index, text in enumerate(lines[:2]):
+        d.text((393, y + 99 + line_index * 28), text, font=font(19), fill=(152, 164, 153))
+    d.line((391, y + 202, 1301, y + 202), fill=(70, 82, 75), width=2)
+d.text((95, 813), "BUILDING THINGS THAT MAKE COMPLEX WORK FEEL SIMPLE.",
+       font=font(17, "mono"), fill=(128, 144, 132))
 board.save(OUT / "experience_board.jpg", quality=93)
 
 contact = Image.new("RGB", (900, 1000), (26, 33, 32))

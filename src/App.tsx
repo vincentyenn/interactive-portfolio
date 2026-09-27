@@ -1,8 +1,11 @@
 import { Component, Suspense, lazy, useCallback, useEffect, useRef, useState, type MouseEvent, type ReactNode } from 'react'
 import type { Focus } from './LoftScene'
 import portfolio from '../content/portfolio.json'
+import { ComputerScreen, ProjectScreen } from './WorldScreens'
+import { getVisitWeather, type Weather } from './visitWeather'
 
 const LoftScene = lazy(() => import('./LoftScene'))
+const ThreepipeAssetPreview = lazy(() => import('./ThreepipeAssetPreview'))
 type SectionFocus = Exclude<Focus, 'room'>
 
 class SceneImportBoundary extends Component<{ children: ReactNode, onError: () => void }, { failed: boolean }> {
@@ -79,7 +82,7 @@ function FocusPanel({ focus, selectedProject, sceneAvailable, onNavigate, onBack
   selectedProject: number | null
   sceneAvailable: boolean
   onNavigate: (route: RouteState) => void
-  onBack: (from: SectionFocus) => void
+  onBack: (from: SectionFocus, keyboard: boolean) => void
   onBackToBlueprints: () => void
 }) {
   const headingRef = useRef<HTMLHeadingElement>(null)
@@ -108,7 +111,7 @@ function FocusPanel({ focus, selectedProject, sceneAvailable, onNavigate, onBack
 
   return <aside tabIndex={-1} className={`focus-panel focus-${focus}`} aria-label={`${item.label} details`}>
     <div className="panel-topline"><span>THE LOFT / {item.number}</span><span>{item.object}</span></div>
-    <button className="back-link" onClick={() => onBack(item.id)} aria-label="Back to loft overview">← &nbsp; Back to the loft</button>
+    <button className="back-link" onClick={(event) => onBack(item.id, event.detail === 0)} aria-label="Back to loft overview">← &nbsp; Back to the loft</button>
     {focus === 'computer' && <>
       <p className="eyebrow">At the computer</p>
       <h2 ref={headingRef} tabIndex={-1}>Hi, I’m<br className="short-screen-break" />{' '}<em>Vincent.</em></h2>
@@ -128,7 +131,7 @@ function FocusPanel({ focus, selectedProject, sceneAvailable, onNavigate, onBack
       <h2 ref={headingRef} tabIndex={-1}>Selected<br className="short-screen-break" />{' '}<em>work.</em></h2>
       <p className="panel-copy">{sceneAvailable ? 'Each blueprint is a project. Pick one on the table or from this list.' : 'Choose a project from the list below.'}</p>
       <div className="project-picker" role="group" aria-label="Select a project">
-        {portfolio.projects.map((entry, index) => <button key={entry.id} className="project-choice"
+        {portfolio.projects.map((entry, index) => <button key={entry.id} className="project-choice" data-blueprint-index={index}
           ref={(node) => { projectButtonsRef.current[index] = node }}
           onClick={() => onNavigate({ focus: 'projects', selectedProject: index })}>
           <span className="choice-number">0{index + 1}</span><span>{entry.title}<small>{entry.category}</small></span><Arrow />
@@ -154,6 +157,9 @@ function FocusPanel({ focus, selectedProject, sceneAvailable, onNavigate, onBack
       <p className="eyebrow">The personal shelf</p>
       <h2 ref={headingRef} tabIndex={-1}>More than<br /><em>code.</em></h2>
       <p className="panel-lead">{portfolio.about}</p>
+      <Suspense fallback={<div className="threepipe-preview-state standalone" role="status">Preparing the camcorder…</div>}>
+        <ThreepipeAssetPreview />
+      </Suspense>
       <div className="interests"><span>Camcorder / storytelling</span><span>Football / sports</span><span>Headphones / music</span><span>Recipes / cooking</span></div>
     </>}
     {focus === 'contact' && <>
@@ -167,6 +173,9 @@ function FocusPanel({ focus, selectedProject, sceneAvailable, onNavigate, onBack
 }
 
 export default function App() {
+  const heroRef = useRef<HTMLElement>(null)
+  const previousRouteRef = useRef<RouteState | null>(null)
+  const pendingBlueprintFocusRef = useRef<number | null>(null)
   const [route, setRoute] = useState<RouteState>(() => {
     const initial = routeFromHash(window.location.hash)
     const canonical = hashForRoute(initial)
@@ -177,11 +186,10 @@ export default function App() {
     return initial
   })
   const { focus, selectedProject } = route
+  const [weather] = useState<Weather>(() => getVisitWeather())
   const [sceneReady, setSceneReady] = useState(false)
-  const [mobileNavOpen, setMobileNavOpen] = useState(false)
   const [sceneFailed, setSceneFailed] = useState(() => !canUseWebGL() || new URLSearchParams(window.location.search).has('no3d'))
-  const navButtonsRef = useRef<Partial<Record<SectionFocus, HTMLButtonElement | null>>>({})
-  const roomNavRef = useRef<HTMLElement>(null)
+  const navLinksRef = useRef<Partial<Record<SectionFocus, HTMLAnchorElement | null>>>({})
   const reducedMotion = useMedia('(prefers-reduced-motion: reduce)')
   const mobile = useMedia('(max-width: 700px)')
   const onReady = useCallback(() => setSceneReady(true), [])
@@ -193,13 +201,12 @@ export default function App() {
       window.history.pushState({ loftRoute: hash, previousHash: window.location.hash || '#/room' }, '', hash)
     }
     setRoute(next)
-    setMobileNavOpen(false)
   }, [])
 
   const onFocus = useCallback((next: Focus) => navigate({ focus: next, selectedProject: null }), [navigate])
-  const onBack = useCallback((from: SectionFocus) => {
+  const onBack = useCallback((from: SectionFocus, keyboard: boolean) => {
     navigate({ focus: 'room', selectedProject: null })
-    requestAnimationFrame(() => navButtonsRef.current[from]?.focus({ preventScroll: true }))
+    requestAnimationFrame(() => (keyboard ? navLinksRef.current[from] : heroRef.current)?.focus({ preventScroll: true }))
   }, [navigate])
   const onProject = useCallback((index: number) => navigate({ focus: 'projects', selectedProject: index }), [navigate])
   const onBackToBlueprints = useCallback(() => {
@@ -210,6 +217,7 @@ export default function App() {
     }
     navigate({ focus: 'projects', selectedProject: null })
   }, [navigate])
+  const activeProject = selectedProject === null ? null : portfolio.projects[selectedProject]
 
   useEffect(() => {
     const syncRoute = () => {
@@ -220,7 +228,6 @@ export default function App() {
         window.history.replaceState({ loftRoute: canonical }, '', canonical)
       }
       setRoute(next)
-      setMobileNavOpen(false)
     }
     window.addEventListener('popstate', syncRoute)
     window.addEventListener('hashchange', syncRoute)
@@ -235,47 +242,70 @@ export default function App() {
     return () => { document.body.style.cursor = '' }
   }, [focus, sceneFailed])
 
+  useEffect(() => {
+    const previous = previousRouteRef.current
+    previousRouteRef.current = route
+    if (previous?.focus === 'projects' && previous.selectedProject !== null &&
+      focus === 'projects' && selectedProject === null) {
+      pendingBlueprintFocusRef.current = previous.selectedProject
+    }
+    const index = pendingBlueprintFocusRef.current
+    if (index === null || focus !== 'projects' || selectedProject !== null) return
+    const frame = requestAnimationFrame(() => {
+      const worldBlueprint = document.querySelector<HTMLButtonElement>(
+        `.world-blueprint-button[data-blueprint-index="${index}"]`,
+      )
+      if (sceneReady && !sceneFailed && worldBlueprint) {
+        worldBlueprint.focus({ preventScroll: true })
+        pendingBlueprintFocusRef.current = null
+        return
+      }
+      const accessibleChoice = document.querySelector<HTMLButtonElement>(
+        `.project-choice[data-blueprint-index="${index}"]`,
+      )
+      if (accessibleChoice) {
+        accessibleChoice.focus({ preventScroll: true })
+        pendingBlueprintFocusRef.current = null
+      }
+    })
+    return () => cancelAnimationFrame(frame)
+  }, [focus, route, sceneFailed, sceneReady, selectedProject])
+
   const focusRoomNavigation = (event: MouseEvent<HTMLAnchorElement>) => {
     event.preventDefault()
-    if (mobile && focus !== 'room') setMobileNavOpen(true)
-    requestAnimationFrame(() => roomNavRef.current?.focus({ preventScroll: true }))
+    requestAnimationFrame(() => navLinksRef.current.computer?.focus({ preventScroll: true }))
   }
 
-  return <main className={`hero ${focus !== 'room' ? 'is-focused' : ''}`} aria-label="Interactive loft portfolio">
-    <a className="skip-link" href="#room-navigation" onClick={focusRoomNavigation}>Skip the 3D scene</a>
-    <div className="scene-layer" aria-hidden="true">
+  const projectOpen = focus === 'projects' && selectedProject !== null
+  return <main ref={heroRef} tabIndex={-1} className={`hero ${focus !== 'room' ? 'is-focused' : ''} ${sceneFailed ? 'scene-failed' : ''} ${projectOpen ? 'project-open' : ''}`} aria-label="Interactive loft portfolio">
+    <a className="skip-link" href="#page-navigation" onClick={focusRoomNavigation}>Skip the 3D scene</a>
+    <h1 className="visually-hidden">Vincent Yen’s interactive portfolio</h1>
+    <p className="visually-hidden">The exterior city weather for this visit is {weather}.</p>
+    <div className="scene-layer">
       {!sceneFailed && <SceneImportBoundary onError={onError}><Suspense fallback={null}>
-        <LoftScene focus={focus} selectedProject={selectedProject} reducedMotion={reducedMotion} mobile={mobile}
+        <LoftScene focus={focus} selectedProject={selectedProject} reducedMotion={reducedMotion} mobile={mobile} weather={weather}
+          computerContent={<ComputerScreen onNavigate={onFocus} />}
+          projectContent={activeProject && selectedProject !== null
+            ? <ProjectScreen project={activeProject} index={selectedProject} onBack={onBackToBlueprints} />
+            : null}
           onFocus={onFocus} onProject={onProject} onReady={onReady} onError={onError} />
       </Suspense></SceneImportBoundary>}
     </div>
     <div className="scene-vignette" aria-hidden="true" />
     <header className="site-header">
-      <button className="brand" onClick={() => onFocus('room')} aria-label="Vincent Yen, return to loft overview"><span className="brand-mark">V<span>Y</span></span><span className="brand-name">VINCENT YEN <small>CREATIVE DEVELOPER</small></span></button>
-      <div className="header-right"><span className="location">THE LOFT &nbsp; / &nbsp; PORTFOLIO 2026</span>
-        <button className="header-contact" onClick={() => onFocus('contact')}>Get in touch <Arrow diagonal /></button>
-        {mobile && focus !== 'room' && <button className="mobile-menu-toggle" aria-controls="room-navigation" aria-expanded={mobileNavOpen}
-          onClick={() => setMobileNavOpen((open) => !open)}>{mobileNavOpen ? 'Close' : 'Destinations'}</button>}
-      </div>
+      <nav id="page-navigation" className="site-nav" aria-label="Portfolio pages">
+        {sections.map((section) => <a key={section.id}
+          ref={(node) => { navLinksRef.current[section.id] = node }}
+          href={hashForRoute({ focus: section.id, selectedProject: null })}
+          aria-current={focus === section.id ? 'page' : undefined}
+          onClick={(event) => { event.preventDefault(); onFocus(section.id) }}>
+          {section.label}
+        </a>)}
+      </nav>
     </header>
-    {focus === 'room' && <div className="hero-copy">
-      <p className="eyebrow"><span className="eyebrow-line" /> AN INTERACTIVE PORTFOLIO</p>
-      <h1>Step inside<br /><em>my world.</em></h1>
-      <p className="hero-intro">A place for the things I build, the work I’ve done, and the interests that shape it all.</p>
-      <div className="hero-actions"><button className="primary-button" onClick={() => onFocus('computer')}>Start at the computer <Arrow /></button></div>
-    </div>}
-    {!sceneReady && !sceneFailed && <div className="scene-status" role="status"><span className="status-dot" /> Preparing the loft…</div>}
+    {!sceneReady && !sceneFailed && <div className="scene-status visually-hidden" role="status">Preparing the loft…</div>}
     {sceneFailed && <div className="scene-fallback" role="status"><span>3D VIEW UNAVAILABLE</span><p>The room could not load. Use the destinations to explore this portfolio.</p></div>}
-    <nav id="room-navigation" ref={roomNavRef} tabIndex={-1} className={`room-nav ${mobileNavOpen ? 'mobile-open' : ''}`}
-      aria-label="Explore the loft" hidden={mobile && focus !== 'room' && !mobileNavOpen}>
-      <span className="nav-heading">EXPLORE THE ROOM <span aria-hidden="true">↘</span></span>
-      {sections.map((section) => <button key={section.id} ref={(node) => { navButtonsRef.current[section.id] = node }}
-        className={focus === section.id ? 'active' : ''} onClick={() => onFocus(section.id)} aria-pressed={focus === section.id}>
-        <span className="nav-index">{section.number}</span><span><strong>{section.label}</strong><small>{section.object}</small></span><Arrow />
-      </button>)}
-    </nav>
-    {focus !== 'room' && <FocusPanel focus={focus} selectedProject={selectedProject} sceneAvailable={!sceneFailed}
+    {focus !== 'room' && (sceneFailed || (focus !== 'computer' && focus !== 'projects')) && <FocusPanel focus={focus} selectedProject={selectedProject} sceneAvailable={!sceneFailed}
       onNavigate={navigate} onBack={onBack} onBackToBlueprints={onBackToBlueprints} />}
-    <div className="hero-footer"><span>{sceneFailed ? 'USE THE DESTINATIONS TO EXPLORE' : 'INTERACTIVE SPACE  /  CLICK OBJECTS TO EXPLORE'}</span></div>
   </main>
 }
