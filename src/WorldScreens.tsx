@@ -4,7 +4,7 @@ import type { Focus } from './LoftScene'
 
 type TerminalLine = { id: number, kind: 'system' | 'command' | 'output' | 'link', text: string, href?: string }
 
-export function ComputerScreen({ onNavigate }: { onNavigate: (focus: Focus) => void }) {
+export function usePortfolioTerminal(onNavigate: (focus: Focus) => void) {
   const inputRef = useRef<HTMLInputElement>(null)
   const outputRef = useRef<HTMLDivElement>(null)
   const commandHistory = useRef<string[]>([])
@@ -15,10 +15,6 @@ export function ComputerScreen({ onNavigate }: { onNavigate: (focus: Focus) => v
     { id: 0, kind: 'system', text: 'VINCENT YEN · PORTFOLIO TERMINAL' },
     { id: 1, kind: 'system', text: 'Type help to explore. Type room to leave the computer.' },
   ])
-
-  useEffect(() => {
-    if (window.matchMedia('(pointer: fine)').matches) inputRef.current?.focus({ preventScroll: true })
-  }, [])
 
   useEffect(() => {
     if (outputRef.current) outputRef.current.scrollTop = outputRef.current.scrollHeight
@@ -114,6 +110,14 @@ export function ComputerScreen({ onNavigate }: { onNavigate: (focus: Focus) => v
     }
   }
 
+  return { inputRef, outputRef, draft, setDraft, lines, executeCommand, submitCommand, handleCommandKeys, onNavigate }
+}
+
+export function ComputerScreen({ controller }: { controller: ReturnType<typeof usePortfolioTerminal> }) {
+  const { inputRef, outputRef, draft, setDraft, lines, executeCommand, submitCommand, handleCommandKeys, onNavigate } = controller
+  useEffect(() => {
+    if (window.matchMedia('(pointer: fine)').matches) inputRef.current?.focus({ preventScroll: true })
+  }, [inputRef])
   const shortcuts = ['about', 'experience', 'projects', 'contact']
   return <section className="world-screen world-computer-screen world-terminal" aria-label="Interactive portfolio terminal"
     onPointerDown={(event) => event.stopPropagation()}
@@ -177,7 +181,7 @@ export function ProjectScreen({ project, index, onBack }: {
     </div>
     <div ref={scrollRef} className="world-project-scroll" tabIndex={0} aria-label={`Scroll through ${project.title} details`}
       onWheel={(event) => event.stopPropagation()} onTouchStart={(event) => event.stopPropagation()}
-      onTouchMove={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()}>
+      onTouchMove={(event) => event.stopPropagation()} onKeyDown={(event) => { if (event.key !== 'Escape') event.stopPropagation() }}>
       <p className="world-screen-kicker">{project.category}</p>
       <h2>{project.title}</h2>
       <p className="world-project-summary">{project.summary}</p>

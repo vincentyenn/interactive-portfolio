@@ -225,8 +225,8 @@ function smoothstep(edge0: number, edge1: number, value: number) {
 }
 
 function createCloudTexture(seed: number) {
-  const width = 256
-  const height = 128
+  const width = 512
+  const height = 256
   const pixels = new Uint8Array(width * height * 4)
   for (let y = 0; y < height; y += 1) {
     const v = y / (height - 1)
@@ -242,10 +242,12 @@ function createCloudTexture(seed: number) {
       const density = 0.58 + broad * 0.24 + detail * 0.18
       const fadeAtEnds = smoothstep(0, 0.1, u) * (1 - smoothstep(0.9, 1, u))
       const alpha = Math.round(255 * wisps * density * fadeAtEnds)
+      const silverLining = smoothstep(.42, .72, v) * .24
+      const shading = Math.min(1, .65 + broad * .13 + detail * .07 + silverLining)
       const offset = (y * width + x) * 4
-      pixels[offset] = 255
-      pixels[offset + 1] = 255
-      pixels[offset + 2] = 255
+      pixels[offset] = Math.round(255 * shading)
+      pixels[offset + 1] = Math.round(255 * shading)
+      pixels[offset + 2] = Math.round(255 * Math.min(1, shading + .025))
       pixels[offset + 3] = alpha
     }
   }
@@ -263,22 +265,23 @@ function WeatherClouds({ count, weather, reducedMotion }: { count: number, weath
   const root = useRef<THREE.Group>(null)
   const stormy = weather === 'thunderstorm'
   const nightTone = useMemo(() => new THREE.Color(stormy ? '#14212d' : '#343f47'), [stormy])
-  const dayTone = useMemo(() => new THREE.Color(stormy ? '#465761' : '#929c9c'), [stormy])
+  const dayTone = useMemo(() => new THREE.Color(stormy ? '#7b8796' : weather === 'clear' ? '#fff4e0' : '#e0e6e6'), [stormy, weather])
   const materials = useMemo(() => Array.from({ length: 4 }, (_, index) => new THREE.MeshBasicMaterial({
     map: createCloudTexture(index + 1),
     color: '#75838a',
     transparent: true,
-    opacity: stormy ? 0.78 : weather === 'rain' ? 0.68 : 0.58,
+    opacity: stormy ? .82 : weather === 'rain' ? .72 : weather === 'clear' ? .22 : .64,
+    fog: false,
     alphaTest: 0.012,
     depthWrite: false,
     side: THREE.DoubleSide,
   })), [stormy, weather])
   const positions = useMemo(() => {
-    // Keep the clouds directly behind the three rear openings (y=3.34–5.90).
-    // Extra storm layers sit at different depths to read as a heavier sky in reduced motion too.
+    // Broad cloud banks live beyond the buildings, rather than miniature
+    // clouds hovering immediately outside a window.
     const windowCenters: [number, number, number][] = [
-      [-4.55, 4.35, -8.3], [-2.8, 5.0, -9.6], [-1.05, 4.45, -11.2],
-      [-4.15, 5.05, -13.3], [-2.35, 4.25, -14.6], [0.2, 5.05, -10.8], [1.05, 4.45, -16.4],
+      [-22, 15, -60], [18, 22, -66], [-8, 30, -72],
+      [32, 12, -68], [-35, 26, -75], [0, 12, -70], [8, 36, -78],
     ]
     return Array.from({ length: count }, (_, index) => ({
       position: windowCenters[index % windowCenters.length],
@@ -288,8 +291,8 @@ function WeatherClouds({ count, weather, reducedMotion }: { count: number, weath
   }, [count, materials.length])
 
   useFrame(({ clock }) => {
-    for (const material of materials) material.color.copy(nightTone).lerp(dayTone, environment.daylight * 0.78)
-    if (root.current && !reducedMotion) root.current.position.x = Math.sin(clock.elapsedTime * 0.018) * 0.45
+    for (const material of materials) material.color.copy(nightTone).lerp(dayTone, environment.daylight)
+    if (root.current && !reducedMotion) root.current.position.x = Math.sin(clock.elapsedTime * .006) * 3
   })
   useEffect(() => () => {
     for (const material of materials) {
@@ -299,20 +302,22 @@ function WeatherClouds({ count, weather, reducedMotion }: { count: number, weath
   }, [materials])
 
   return <group ref={root}>
-    {positions.map((cloud, index) => <group key={index} position={cloud.position} scale={cloud.scale}>
-      <mesh material={materials[cloud.textureIndex]} castShadow={false} receiveShadow={false}>
-        <planeGeometry args={[3.6, 1.7]} />
-      </mesh>
-      {stormy && <mesh position={[0.08, 0.06, -0.16]} scale={[1.12, 0.9, 1]}
-        material={materials[(cloud.textureIndex + 1) % materials.length]} castShadow={false} receiveShadow={false}>
-        <planeGeometry args={[3.6, 1.7]} />
-      </mesh>}
+    {[false, true].map((rear) => <group key={String(rear)} rotation={[0, rear ? Math.PI : 0, 0]} position={[0, 0, rear ? 9 : 0]}>
+      {positions.map((cloud, index) => <group key={index} position={cloud.position} scale={cloud.scale}>
+        <mesh material={materials[cloud.textureIndex]} castShadow={false} receiveShadow={false}>
+          <planeGeometry args={[48, 22]} />
+        </mesh>
+        {stormy && <mesh position={[0.08, 0.06, -0.16]} scale={[1.12, 0.9, 1]}
+          material={materials[(cloud.textureIndex + 1) % materials.length]} castShadow={false} receiveShadow={false}>
+          <planeGeometry args={[48, 22]} />
+        </mesh>}
+      </group>)}
     </group>)}
   </group>
 }
 
 function Precipitation({ kind, mobile, reducedMotion }: { kind: 'rain' | 'snow', mobile: boolean, reducedMotion: boolean }) {
-  const count = kind === 'rain' ? mobile ? 95 : 340 : mobile ? 70 : 230
+  const count = kind === 'rain' ? mobile ? 140 : 520 : mobile ? 80 : 260
   const pointsRef = useRef<THREE.Points>(null)
   const linesRef = useRef<THREE.LineSegments>(null)
   const data = useMemo(() => {
@@ -323,19 +328,19 @@ function Precipitation({ kind, mobile, reducedMotion }: { kind: 'rain' | 'snow',
     const speed = new Float32Array(count)
     const length = new Float32Array(count)
     for (let index = 0; index < count; index += 1) {
-      const x = -21 + Math.random() * 42
+      const x = -12 + Math.random() * 24
       const y = -1 + Math.random() * 21
-      const z = -7 - Math.random() * 39
+      const z = -6.4 - Math.random() * 23
       baseX[index] = x
       baseZ[index] = z
       speed[index] = kind === 'rain' ? 5.8 + Math.random() * 4.8 : 0.24 + Math.random() * 0.45
-      length[index] = 0.28 + Math.random() * 0.46
+      length[index] = 0.14 + Math.random() * 0.32
       if (kind === 'rain') {
         const offset = index * 6
         positions[offset] = x
         positions[offset + 1] = y
         positions[offset + 2] = z
-        positions[offset + 3] = x + 0.09
+        positions[offset + 3] = x - .045
         positions[offset + 4] = y + length[index]
         positions[offset + 5] = z
       } else {
@@ -352,9 +357,22 @@ function Precipitation({ kind, mobile, reducedMotion }: { kind: 'rain' | 'snow',
     result.setAttribute('position', new THREE.BufferAttribute(data.positions, 3))
     return result
   }, [data])
+  const snowTexture = useMemo(() => {
+    const pixels = new Uint8Array(32 * 32 * 4)
+    for (let y = 0; y < 32; y++) for (let x = 0; x < 32; x++) {
+      const i = (y * 32 + x) * 4
+      const radius = Math.hypot((x - 15.5) / 15.5, (y - 15.5) / 15.5)
+      pixels[i] = pixels[i + 1] = pixels[i + 2] = 255
+      pixels[i + 3] = Math.round(255 * (1 - smoothstep(.15, 1, radius)))
+    }
+    const texture = new THREE.DataTexture(pixels, 32, 32)
+    texture.needsUpdate = true
+    return texture
+  }, [])
+  useEffect(() => () => snowTexture.dispose(), [snowTexture])
   const material = useMemo(() => kind === 'rain'
-    ? new THREE.LineBasicMaterial({ color: '#c4d8e0', transparent: true, opacity: 0.3, depthWrite: false })
-    : new THREE.PointsMaterial({ color: '#e6eef0', size: mobile ? 0.075 : 0.095, transparent: true, opacity: 0.78, depthWrite: false, sizeAttenuation: true }), [kind, mobile])
+    ? new THREE.LineBasicMaterial({ color: '#c4d8e0', transparent: true, opacity: 0.24, depthWrite: false })
+    : new THREE.PointsMaterial({ color: '#e6eef0', map: snowTexture, size: mobile ? .065 : .08, transparent: true, opacity: 0.78, depthWrite: false, sizeAttenuation: true }), [kind, mobile, snowTexture])
 
   useFrame(({ clock }, delta) => {
     if (reducedMotion) return
@@ -370,11 +388,11 @@ function Precipitation({ kind, mobile, reducedMotion }: { kind: 'rain' | 'snow',
           y = 20
           x = data.baseX[index]
         }
-        x += delta * 0.16
+        x += delta * (.35 + Math.sin(elapsed * .22) * .12)
         positions[offset] = x
         positions[offset + 1] = y
         positions[offset + 2] = data.baseZ[index]
-        positions[offset + 3] = x + 0.09
+        positions[offset + 3] = x - .045
         positions[offset + 4] = y + data.length[index]
         positions[offset + 5] = data.baseZ[index]
       } else {
@@ -400,7 +418,7 @@ function Lightning({ reducedMotion }: { reducedMotion: boolean }) {
   const light = useRef<THREE.PointLight>(null)
   const nextFlash = useRef(11 + Math.random() * 15)
   const startedAt = useRef(-1)
-  const duration = 0.2
+  const duration = .65
 
   useFrame(({ clock }) => {
     const now = clock.elapsedTime
@@ -415,24 +433,29 @@ function Lightning({ reducedMotion }: { reducedMotion: boolean }) {
     }
     const elapsed = now - startedAt.current
     const envelope = elapsed >= 0 && elapsed < duration ? Math.sin((elapsed / duration) * Math.PI) : 0
-    light.current.intensity = envelope * 2.3
+    light.current.intensity = envelope * 7
   })
   return <pointLight ref={light} position={[0, 8, -7.8]} color="#bdd9f5" distance={18} decay={2} intensity={0} />
 }
 
 export default function LoftCity({ mobile, reducedMotion }: { mobile: boolean, reducedMotion: boolean }) {
   const { weather } = useLoftEnvironment()
-  const cloudCount = weather === 'thunderstorm' ? 7 : weather === 'rain' ? 5 : weather === 'cloudy' ? 4 : 0
+  const cloudCount = weather === 'thunderstorm' ? 7 : weather === 'rain' ? 5 : weather === 'cloudy' || weather === 'snow' ? 4 : 2
   const hasRain = weather === 'rain' || weather === 'thunderstorm'
 
   return <group name="loft exterior city">
     <Skyline />
+    <group rotation={[0, Math.PI, 0]} position={[0, 0, 4]}><Skyline /></group>
     <Suspense fallback={null}>
       <CityAssetBoundary><ImportedFacade /></CityAssetBoundary>
     </Suspense>
-    {cloudCount > 0 && <WeatherClouds count={cloudCount} weather={weather} reducedMotion={reducedMotion} />}
+    <WeatherClouds count={cloudCount} weather={weather} reducedMotion={reducedMotion} />
+    <group rotation={[0, Math.PI, 0]} position={[0, 0, 9]}>
+      {hasRain && <Precipitation kind="rain" mobile={mobile} reducedMotion={reducedMotion} />}
+      {weather === 'snow' && <Precipitation kind="snow" mobile={mobile} reducedMotion={reducedMotion} />}
+    </group>
     {hasRain && <Precipitation kind="rain" mobile={mobile} reducedMotion={reducedMotion} />}
     {weather === 'snow' && <Precipitation kind="snow" mobile={mobile} reducedMotion={reducedMotion} />}
-    <Lightning reducedMotion={reducedMotion} />
+    {weather === 'thunderstorm' && !reducedMotion && <Lightning reducedMotion={reducedMotion} />}
   </group>
 }

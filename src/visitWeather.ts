@@ -18,6 +18,11 @@ function chooseWeighted(entries: [Weather, number][]): Weather {
 }
 
 export function getVisitWeather(): Weather {
+  // Local art-direction preview; production always uses the per-visit selection.
+  if (import.meta.env.DEV && typeof window !== 'undefined') {
+    const preview = new URLSearchParams(window.location.search).get('weather')
+    if (preview && weatherValues.includes(preview as Weather)) return preview as Weather
+  }
   let storage: Storage | null = null
   try {
     storage = typeof window === 'undefined' ? null : window.sessionStorage

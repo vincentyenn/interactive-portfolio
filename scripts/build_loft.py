@@ -6,6 +6,8 @@ converts Blender's Z-up coordinates to Three's Y-up coordinates.
 """
 
 import math
+import json
+import runpy
 import tempfile
 from pathlib import Path
 
@@ -250,11 +252,23 @@ def imported(slug, center, target_width, rotation_z=0):
     offset = pivot - Vector(((low.x+high.x)/2, (low.y+high.y)/2, low.z)) * scale
     rotation = Matrix.Translation(pivot) @ Matrix.Rotation(rotation_z, 4, "Z") @ Matrix.Translation(-pivot)
     transform = rotation @ Matrix.Translation(offset) @ Matrix.Scale(scale, 4)
+    # Snapshot before touching any parent. Articulated models can have mesh
+    # children; applying the transform to parent and child would move them twice.
+    originals = {obj: obj.matrix_world.copy() for obj in added}
+    for obj in set(bpy.data.objects) - before:
+        obj.animation_data_clear()
+        for constraint in list(obj.constraints):
+            obj.constraints.remove(constraint)
     for obj in added:
+        obj.parent = None
         obj.name = f"{slug} / {obj.name}"
-        obj.matrix_world = transform @ obj.matrix_world
+        obj.matrix_world = transform @ originals[obj]
     bpy.context.view_layer.update()
 
+
+layout = json.loads((ROOT / "content" / "loft-layout.json").read_text())
+zone_start = set(bpy.data.objects)
+zones = {}
 
 # Shell: a front-open loft with an oak mezzanine, not a painted backdrop.
 cube("concrete floor", (0,-0.14,-0.05), (12.4,0.28,9.7), concrete)
@@ -379,6 +393,9 @@ tube("stair side rail", (landing_rail_x,3.26,-2.48),
 tube("stair stringer", (first_step[0]-0.67,first_step[1]-0.16,first_step[2]),
      (last_step[0]-0.67,last_step[1]-0.16,last_step[2]), 0.075, black)
 
+zones["shell"] = set(bpy.data.objects) - zone_start
+zone_start = set(bpy.data.objects)
+
 # A compact, warm display shelf beneath the loft, clear of the computer desk.
 for height in (0.62, 1.43, 2.27):
     cube("personal shelf", (-4.72,height,-2.67), (2.08,0.09,0.62), veneer, 0.02)
@@ -398,21 +415,15 @@ for row, height in enumerate((0.65,1.47,2.31)):
          (0.39,0.34,0.055), black, 0.008)
     cube("shelf photo mat", (-4.27-row*0.08,height+0.19,-2.68),
          (0.31,0.26,0.005), cream)
-# A small plant gives the personal shelf a natural silhouette in the wide view.
-cylinder("plant ceramic pot", (-3.96,2.48,-2.57), 0.15, 0.28, terracotta, 20)
-torus("plant pot lip", (-3.96,2.62,-2.57), 0.137, 0.014, terracotta)
-cylinder("plant soil", (-3.96,2.63,-2.57), 0.135, 0.018, dark, 20)
-for index in range(12):
-    angle = index * math.radians(137.5)
-    layer = index % 4
-    stem_x = -3.96 + (0.09 + 0.02 * (layer % 2)) * math.cos(angle)
-    stem_z = -2.57 + (0.09 + 0.02 * (layer % 2)) * math.sin(angle)
-    leaf_height = 2.68 + 0.025 * layer
-    tube("plant stem", (-3.96,2.62 + 0.018 * layer,-2.57),
-         (stem_x,leaf_height,stem_z), 0.009, leafgreen, 8)
-    leaf = sphere("plant leaf", (stem_x,leaf_height + 0.025,stem_z),
-                  (0.072,0.13,0.032), leafgreen, 24, 16)
-    leaf.rotation_euler.z = angle
+# Detailed CC0 succulent replaces the smooth placeholder leaves.
+plant_before = set(bpy.data.objects)
+imported("potted_plant_04", (-3.96,2.315,-2.57), 0.38)
+for obj in set(bpy.data.objects) - plant_before:
+    if obj.type == "MESH":
+        obj.name = "plant realistic / " + obj.name
+
+zones["shelf"] = set(bpy.data.objects) - zone_start
+zone_start = set(bpy.data.objects)
 
 # A run of slatted timber and a narrow dark reveal add depth behind the desk.
 cube("desk oak wall inset", (-1.54,1.55,-4.485), (3.15,2.86,0.055), veneer, 0.008)
@@ -426,8 +437,8 @@ for x in (-3.17,-0.28):
     for depth in (-2.71,-1.47):
         cube("computer desk leg", (x,0.39,depth), (0.09,0.79,0.09), black)
 cube("monitor stand foot", (-1.71,0.9,-2.41), (0.58,0.045,0.34), monitor_alloy, 0.025, 5)
-cube("monitor stand neck", (-1.71,1.12,-2.4), (0.075,0.42,0.07), monitor_alloy, 0.024, 5)
-cylinder("monitor swivel hinge", (-1.71,1.31,-2.406), 0.051, 0.16, black, 36,
+cube("monitor stand neck", (-1.71,1.12,-2.52), (0.075,0.42,0.07), monitor_alloy, 0.024, 5)
+cylinder("monitor swivel hinge", (-1.71,1.31,-2.526), 0.051, 0.16, black, 36,
          rotation=(0,math.pi/2,0))
 cube("large computer monitor", (-1.71,1.63,-2.43), (1.85,1.18,0.1), monitor_alloy, 0.04, 7)
 cube("monitor screen bezel", (-1.71,1.63,-2.382), (1.77,1.1,0.018), black, 0.018, 5)
@@ -500,6 +511,9 @@ for line in range(3):
          (-2.98,0.892,-1.62+line*0.045),0.0025,brass,6)
 tube("recipe pencil", (-3.21,0.897,-1.79), (-2.90,0.897,-1.81),0.009,brass)
 
+zones["computer"] = set(bpy.data.objects) - zone_start
+zone_start = set(bpy.data.objects)
+
 # Workbench takes the foreground. Each sheet remains a separate clickable mesh.
 cube("oak workbench top", (2.28,0.91,1.04), (5.45,0.17,2.77), oak, 0.04, 4)
 for x in (-0.15,4.72):
@@ -531,6 +545,9 @@ cube("workbench tool tray", (0.27,1.0185,-0.02), (0.7,0.045,0.31), black, 0.012)
 for x in (0.10,0.24,0.38):
     tube("drafting pen", (x,1.05,-0.13), (x,1.05,0.08), 0.009, brass, 8)
 
+zones["workbench"] = set(bpy.data.objects) - zone_start
+zone_start = set(bpy.data.objects)
+
 # Experience display on the right rear wall, bordered in dark metal.
 cube("experience display frame", (2.74,2.63,-4.27), (3.14,2.2,0.12), black, 0.028)
 image_plane("experience timeline artwork", (2.74,2.63,-4.192), 2.95,1.96,boardmat)
@@ -539,6 +556,9 @@ for x in (1.22,4.27):
 cube("experience picture light", (2.74,3.91,-4.12),(3.04,0.08,0.07),brass,0.018)
 cube("experience picture light diffuser", (2.74,3.865,-4.08),
      (2.78,0.016,0.025), glow)
+
+zones["experience"] = set(bpy.data.objects) - zone_start
+zone_start = set(bpy.data.objects)
 
 # Contact door occupies the right wall bay.
 cube("contact door frame", (5.21,1.55,-3.21),(1.55,3.13,0.18),black,0.018)
@@ -549,6 +569,9 @@ cylinder("door handle", (5.7,1.39,-2.98),0.05,0.11,brass,rotation=(math.pi/2,0,0
 cube("intercom", (4.26,1.45,-4.39),(0.16,0.3,0.09),black,0.016)
 cylinder("intercom light", (4.26,1.51,-4.31),0.023,0.015,glow,rotation=(math.pi/2,0,0))
 
+zones["door"] = set(bpy.data.objects) - zone_start
+zone_start = set(bpy.data.objects)
+
 # Loose architecture, light fixtures, and props add depth and scale.
 for x,depth,height in ((-4.4,-0.1,2.83),(-0.3,-0.7,3.65),(3.7,-1.2,5.45)):
     bpy.ops.mesh.primitive_cone_add(vertices=24, radius1=0.28, radius2=0.11,
@@ -558,7 +581,7 @@ for x,depth,height in ((-4.4,-0.1,2.83),(-0.3,-0.7,3.65),(3.7,-1.2,5.45)):
     cylinder("pendant brass collar", (x,height+0.1,depth),0.115,0.025,brass,24)
     cylinder("warm pendant bulb", (x,height-0.11,depth),0.085,0.13,glow,18)
     tube("pendant wire", (x,height+0.07,depth),(x,6.0,depth),0.014,black)
-cube("floor rug", (-1.58,0.016,1.75),(2.1,0.025,1.85),dark,0.016)
+# Floor textiles are arranged with the furniture in loft_realism.py.
 cube("pinboard above shelf", (-4.05,2.33,-3.92),(2.08,0.68,0.055),black,0.02)
 for i in range(3):
     cube("pinned card", (-4.7+i*0.62,2.35,-3.875),(0.39,0.41,0.012),cream,0.008)
@@ -567,6 +590,9 @@ for i in range(3):
 imported("desk_lamp_arm_01", (0.0,1.02,-0.13), 0.68)
 imported("modern_arm_chair_01", (-1.82,0.0,-0.58), 0.95, rotation_z=math.pi)
 imported("american_football", (-3.75,1.53,-2.62), 0.33)
+
+runpy.run_path(str(ROOT / "scripts" / "loft_expansion.py"))["expand_loft"](globals())
+runpy.run_path(str(ROOT / "scripts" / "loft_realism.py"))["dress_loft"](globals())
 
 # The imported props and roughness masks are tiny in the room view. Keep the
 # source files untouched; pack smaller temporary copies into the editable
@@ -610,8 +636,8 @@ area("front fill", (0,4.0,5), (0,2,-1.5), 350, (0.75,0.83,1), 5)
 cam_data = bpy.data.cameras.new("preview camera")
 cam = bpy.data.objects.new("preview camera",cam_data)
 bpy.context.collection.objects.link(cam)
-cam.location = xyz(0.3,3.32,8.4)
-cam.rotation_euler = (Vector(xyz(0,2.08,-0.9))-cam.location).to_track_quat("-Z","Y").to_euler()
+cam.location = xyz(*layout["roomCamera"])
+cam.rotation_euler = (Vector(xyz(*layout["roomTarget"]))-cam.location).to_track_quat("-Z","Y").to_euler()
 cam_data.lens = 28
 bpy.context.scene.camera = cam
 
@@ -623,5 +649,5 @@ for obj in bpy.context.selected_objects:
 for obj in bpy.data.objects:
     if obj.type == "MESH":
         obj.select_set(True)
-bpy.ops.export_scene.gltf(filepath=str(OUT / "loft-room.glb"), export_format="GLB", use_selection=True, export_apply=True)
+bpy.ops.export_scene.gltf(filepath=str(OUT / "loft-room.glb"), export_format="GLB", use_selection=True, export_apply=True, export_animations=False)
 print(f"Saved {blend_path} and {OUT / 'loft-room.glb'}")

@@ -8,6 +8,8 @@ The browser also adjusts a clone of the GLB at load time: it aims the desk chair
 
 The room's 1K PBR textures and detailed prop models were downloaded from [Poly Haven](https://polyhaven.com/), whose assets are [CC0](https://polyhaven.com/license). They are embedded into the room GLB and also kept as source files in `assets/source/`. The exterior city facade is bundled separately under `public/models/loft-city/` with its own source and checksum records.
 
+The exterior uses the human-made [Modular Urban Apartments Facade](https://polyhaven.com/a/modular_urban_apartments_facade) by James Ray Cock, bundled as its 1K glTF and PBR maps under `public/models/loft-city/` (about 16.5 MB). The distant skyline is custom Three.js geometry assembled around this authored facade; no generated city imagery is used. Poly Haven marks the asset CC0; the asset URL, author, and selected format are recorded beside the files in `public/models/loft-city/SOURCE.txt`.
+
 The build script keeps the source images intact and packs reduced 512px copies of small prop maps and roughness masks into the `.blend` and GLB, while retaining higher-resolution architectural maps where they carry visible detail. The current room GLB is about 20 MB.
 
 | Asset | Use | Source |
@@ -33,3 +35,16 @@ This project does not use assets, imagery, copy, or branding from Basement Studi
 The reference repositories were checked before selecting assets. [LUMEN-PS](https://github.com/Samukashvili/LUMEN-PS) produces PBR material maps from four photometric-stereo captures; it is not a browser lighting library, and this scene has no scanner captures to process. The room uses Three.js lights and the PBR maps listed above. [AI Forge MCP](https://github.com/HurtzDonutStudios/ai-forge-mcp), [Build World](https://github.com/thrixel/build-world), and [QtMeshEditor](https://github.com/fernandotonon/QtMeshEditor) are asset-production or editing tools rather than ready-to-drop prop libraries. [OS3A Gallery](https://github.com/ToxSam/os3a-gallery) catalogs CC0 models; its inspected studio props have a faceted style that clashes with the realistic PBR props in this room, so they were left out.
 
 [Threepipe](https://github.com/repalash/threepipe) is used in a separate, lazy-loaded viewer on the About page to present the vintage camcorder as a draggable 3D object. It loads the glTF model and local HDR environment, and uses screen-space ambient occlusion and tone mapping; the main loft remains in React Three Fiber. See the [Threepipe loading guide](https://threepipe.org/guide/loading-files.html) and [render pipeline guide](https://threepipe.org/guide/render-pipeline.html) for these capabilities. This is an isolated compatibility trial: Threepipe expects a custom Three.js fork, while the site uses upstream Three.js 0.186. The regular ESM entry expects symbols absent from the installed Three version, so the viewer imports Threepipe's bundled `dist` entry. `.npmrc` enables legacy peer resolution, and the root `@types/three` override avoids installing Threepipe's private type package. The core is Apache-2.0; review licenses for optional plugins individually. [Vapory](https://github.com/Zulko/vapory) is a MIT-licensed Python wrapper around POV-Ray for offline still rendering. It requires POV-Ray and does not provide an interactive browser scene, so it is not used in the hero.
+
+## September 2026 furniture and material pass
+
+Additional CC0 Poly Haven assets, bundled locally with original glTF sources:
+
+| Asset | Use | Source |
+| --- | --- | --- |
+| Mid Century Lounge Chair | Leather reading chair in the listening nook | [Poly Haven](https://polyhaven.com/a/mid_century_lounge_chair) |
+| Modern Wooden Cabinet | Slatted credenza below the experience collection | [Poly Haven](https://polyhaven.com/a/modern_wooden_cabinet) |
+| Potted Plant 04 | Detailed succulent on the floating shelves | [Poly Haven](https://polyhaven.com/a/potted_plant_04) |
+| Rough Linen | Upholstery and floor textiles, with diffuse, roughness and normal maps | [Poly Haven](https://polyhaven.com/a/rough_linen) |
+
+Downloaded through the official API with MD5 validation in `scripts/fetch_assets.py`. The Studio Small 03 HDR also supplies subtle reflections in the main loft. The rebuilt room GLB is approximately 32 MB; source assets remain editable in Blender. Furniture layout and proportions are authored in `scripts/loft_expansion.py`, `scripts/loft_realism.py`, and `content/loft-layout.json`; the separate in-world content surfaces remain in React Three Fiber.

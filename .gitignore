@@ -5,3 +5,11 @@ dist/
 *.log
 *.tsbuildinfo
 *.blend1
+.local-media/*
+!.local-media/music/
+.local-media/music/*
+!.local-media/music/forever-be-mine.mp3
+!.local-media/music/what-they-do.mp3
+!.local-media/music/idgaf-intro.mp3
+!.local-media/music/still-sleepless.mp3
+!.local-media/music/thx.mp3

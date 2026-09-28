@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import layout, { point } from './loftLayout'
 
 const normalizedName = (name: string) => name.toLowerCase().replace(/[^a-z0-9]/g, '')
 const replacedSourcePattern = /^(?:rearplasterwall|rearplasterlowerwall|rearplasterwindowheader|rearplasterwindowpier\d+|loftoakdeck(?:westpanel|northreturn|southreturn)?|oakstairlanding|loftrailing(?:upright|top|lower)|stairwellguardrail(?:upright|top|lower))\d*$/
@@ -109,8 +110,8 @@ function addMezzanine(group: THREE.Group, oak: THREE.Material, steel: THREE.Mate
 }
 
 function addClearWindowPanes(group: THREE.Group) {
-  const glass = new THREE.MeshPhysicalMaterial({ color: '#c7dce0', roughness: 0.08, transmission: 0.72,
-    thickness: 0.035, transparent: true, opacity: 0.13, depthWrite: false, side: THREE.DoubleSide })
+  const glass = new THREE.MeshStandardMaterial({ color: '#c7dce0', roughness: 0.12, metalness: .12,
+    transparent: true, opacity: 0.09, depthWrite: false, side: THREE.DoubleSide })
   for (const x of [-4.5, -2.75, -1.0]) {
     const pane = new THREE.Mesh(new THREE.PlaneGeometry(1.28, 2.35), glass)
     pane.name = 'loft shell fix / clear window pane'
@@ -154,5 +155,6 @@ export function applyLoftShellFixes(scene: THREE.Object3D) {
   addRearWall(group, wall)
   addMezzanine(group, oak, steel)
   addClearWindowPanes(group)
+  group.scale.set(...point(layout.shellScale))
   scene.add(group)
 }

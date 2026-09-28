@@ -17,7 +17,6 @@ button:focus-visible,a:focus-visible{outline:2px solid #f3b783;outline-offset:4p
 .scene-layer,.scene-layer canvas,.scene-vignette{position:absolute;inset:0;width:100%;height:100%}
 .scene-layer{z-index:0}
 .loft-canvas canvas{transition:filter .7s ease,transform .7s ease;transform-origin:center}
-.hero.project-open .loft-canvas canvas{filter:blur(4px) brightness(.56);transform:scale(1.012)}
 .scene-vignette{z-index:1;pointer-events:none;background:linear-gradient(180deg,rgba(5,8,8,.34),transparent 22%,transparent 70%,rgba(5,8,8,.38)),radial-gradient(ellipse at 51% 48%,transparent 34%,rgba(4,7,7,.56) 100%)}
 .is-focused .scene-vignette{background:linear-gradient(90deg,transparent 36%,rgba(8,12,11,.28) 68%,rgba(8,12,11,.52) 100%),linear-gradient(180deg,rgba(9,13,12,.48),transparent 24%,transparent 78%,rgba(9,13,12,.36))}
 
@@ -193,7 +192,6 @@ button:focus-visible,a:focus-visible{outline:2px solid #f3b783;outline-offset:4p
   .world-project-summary{font-size:12px}
   .world-blueprint-target{width:140px;height:106px}
   .scene-vignette{background:linear-gradient(180deg,rgba(8,13,13,.48) 0%,transparent 28%,transparent 56%,rgba(8,13,13,.58) 100%),linear-gradient(90deg,rgba(9,14,13,.25),transparent)}
-  .hero.project-open .loft-canvas canvas{filter:blur(3px) brightness(.56)}
   .focus-panel{top:auto;left:0;right:0;bottom:0;width:100%;height:min(56svh,500px);padding:17px 23px max(20px,env(safe-area-inset-bottom));border:0;border-top:1px solid rgba(234,213,184,.3);background:rgba(17,22,21,.95);box-shadow:0 -20px 50px rgba(0,0,0,.28);backdrop-filter:blur(15px)}
   .focus-panel .panel-topline{font-size:8px}
   .back-link{margin-top:16px}
@@ -257,3 +255,15 @@ button:focus-visible,a:focus-visible{outline:2px solid #f3b783;outline-offset:4p
 }
 
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;transition-duration:.01ms!important}}
+
+/* Room destinations remain reachable by pointer, keyboard, and touch. */
+.room-navigation{position:absolute;z-index:12;bottom:max(20px,env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);display:flex;gap:4px;padding:5px;border:1px solid rgba(230,219,198,.2);border-radius:24px;background:rgba(19,24,22,.8);backdrop-filter:blur(12px)}
+.room-navigation a{padding:8px 16px;color:#d9d9cf;font:10px 'DM Mono',monospace;letter-spacing:.04em;border-radius:20px}
+.room-navigation a:hover,.room-navigation a[aria-current=location]{background:rgba(229,175,126,.18);color:#f6d8b8}
+.room-navigation a{white-space:nowrap}
+.room-navigation a:focus-visible{outline:2px solid #f3b783;outline-offset:2px}
+.room-object-action{white-space:nowrap;color:#efe5d2;background:rgba(22,28,25,.9);border:1px solid rgba(224,190,147,.5);border-radius:3px;padding:9px 12px;font:10px 'DM Mono',monospace;box-shadow:0 3px 15px #0004}
+.room-object-action:hover,.room-object-action[aria-pressed=true]{border-color:#e4b17e;color:#ffd49d}
+.room-object-action:focus-visible{outline:2px solid #f3b783;outline-offset:4px}
+@media(max-width:700px){.room-navigation{bottom:max(12px,env(safe-area-inset-bottom))}.room-navigation a{padding:10px 13px}.room-object-action{font-size:9px;padding:10px}.focus-panel{bottom:64px;height:min(52svh,470px)}}
+@media(max-width:420px){.room-navigation{gap:1px;padding:4px;max-width:calc(100vw - 16px)}.room-navigation a{padding:12px 8px;font-size:9px;letter-spacing:0}}

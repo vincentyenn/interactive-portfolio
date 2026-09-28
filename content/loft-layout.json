@@ -1,0 +1,59 @@
+{
+  "shellScale": [
+    1.2903225806451613,
+    1,
+    1.25
+  ],
+  "computerOffset": [
+    1.85,
+    0,
+    -1.15
+  ],
+  "workbenchOffset": [
+    1.87,
+    0,
+    -1.74
+  ],
+  "experienceOffset": [
+    1.5,
+    -0.35,
+    -1.155
+  ],
+  "shelfAnchor": [
+    7.42,
+    0,
+    0.2
+  ],
+  "doorDepth": -4.2,
+  "roomCamera": [
+    0.5,
+    2.9,
+    8.8
+  ],
+  "roomTarget": [
+    0.5,
+    1.9,
+    -1.6
+  ],
+  "upstairsCamera": [
+    -1.1,
+    4.95,
+    -3.45
+  ],
+  "upstairsTarget": [
+    -5.3,
+    4.15,
+    -4.65
+  ],
+  "loungeCamera": [
+    0.7,
+    3,
+    4.4
+  ],
+  "loungeTarget": [
+    0.7,
+    1.5,
+    11.6
+  ],
+  "workbenchScale": 0.72
+}

@@ -1,9 +1,9 @@
 import React, { Suspense, useEffect, useMemo, useRef, type ReactNode } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
-import { Html, RoundedBox, useGLTF } from '@react-three/drei'
+import { Environment, RoundedBox, useGLTF } from '@react-three/drei'
 import gsap from 'gsap'
 import * as THREE from 'three'
-import { BlueprintButton } from './WorldScreens'
+import { MonitorSurface, ProjectSheet } from './ObjectSurfaces'
 import {
   ABOUT_SHELF_CAMERA,
   ABOUT_SHELF_HITBOX_POSITION,
@@ -18,18 +18,27 @@ import { applyLoftShellFixes } from './LoftShellFixes'
 import LoftEnvironment from './LoftEnvironment'
 import LoftCity from './LoftCity'
 import type { Weather } from './visitWeather'
+import layout, { point, shellPoint, computerPoint, benchScale, benchPoint, experiencePoint, projectView } from './loftLayout'
+import LivingSpaces from './LivingSpaces'
+import WindowSunlight from './WindowSunlight'
+import ProjectFocus from './ProjectFocus'
+import PersonalArtifacts from './PersonalArtifacts'
+import { batchStaticMeshes } from './batchStaticMeshes'
+import { RenderBudget, RenderStats } from './RenderBudget'
+import { artifactView } from './roomArtifacts'
 
-export type Focus = 'room' | 'computer' | 'projects' | 'experience' | 'about' | 'contact'
+export type Focus = 'room' | 'computer' | 'projects' | 'experience' | 'about' | 'contact' | 'upstairs' | 'lounge' | 'nook'
 type Props = {
   focus: Focus
   selectedProject: number | null
+  selectedArtifact: string | null
+  onArtifact: (id: string) => void
   reducedMotion: boolean
   mobile: boolean
   weather: Weather
   onFocus: (focus: Focus) => void
   onProject: (index: number) => void
-  computerContent: ReactNode
-  projectContent: ReactNode
+  onBackToBlueprints: () => void
   onReady: () => void
   onError: () => void
 }
@@ -41,7 +50,7 @@ type CameraMark = {
   fov?: number
 }
 
-const workbenchCenter: [number, number, number] = [2.28, 0.92, 1.04]
+const workbenchCenter: [number, number, number] = benchPoint([2.28, 0.92, 1.04])
 
 const normalizedObjectName = (name: string) => name.toLowerCase().replace(/[^a-z0-9]/g, '')
 
@@ -56,31 +65,38 @@ function findNamedObject(root: THREE.Object3D, targetName: string): THREE.Object
 }
 
 const marks: Record<Focus, CameraMark> = {
-  room: { position: [0.2, 3.3, 8.6], target: [0, 2.15, -0.8], fov: 46 },
-  computer: { position: [-1.64, 1.9, 0.18], target: [-1.72, 1.58, -2.42], fov: 41 },
-  projects: { position: [workbenchCenter[0], 7.2, workbenchCenter[2]], target: workbenchCenter, up: [0, 0, -1], fov: 48 },
-  experience: { position: [3.45, 2.8, 1.6], target: [3.45, 2.63, -4.2], fov: 42 },
+  room: { position: point(layout.roomCamera), target: point(layout.roomTarget), fov: 52 },
+  upstairs: { position: point(layout.upstairsCamera), target: point(layout.upstairsTarget), fov: 58 },
+  nook: { position: [-5.45, 1.85, 2.15], target: [-6.2, .95, -.95], fov: 72 },
+  lounge: { position: point(layout.loungeCamera), target: point(layout.loungeTarget), fov: 62 },
+  computer: { position: computerPoint([-1.64, 1.9, 0.18]), target: computerPoint([-1.72, 1.58, -2.42]), fov: 41 },
+  projects: { position: [workbenchCenter[0], projectView.cameraHeight, workbenchCenter[2]], target: workbenchCenter, up: [0, 0, -1], fov: projectView.fov },
+  experience: { position: experiencePoint([3.03, 2.75, .3]), target: experiencePoint([3.03, 2.7, -4.43]), fov: 50 },
   about: { position: ABOUT_SHELF_CAMERA, target: ABOUT_SHELF_TARGET, fov: 48 },
   contact: { position: contactDoorView.desktop.position, target: contactDoorView.desktop.target, fov: contactDoorView.desktop.fov },
 }
 
 const mobileMarks: Partial<Record<Focus, CameraMark>> = {
-  room: { position: [0.8, 3.4, 11.3], target: [0.4, 2.1, -0.6], fov: 46 },
-  projects: { position: [workbenchCenter[0], 8.2, workbenchCenter[2]], target: workbenchCenter, up: [0, 0, -1], fov: 82 },
-  computer: { position: [-1.71, 1.78, 0.55], target: [-1.71, 1.63, -2.37], fov: 72 },
-  experience: { position: [2.74, 3, 1.4], target: [2.74, 1.2, -4.2], fov: 75 },
+  room: { position: [0.3, 4.5, 13.1], target: point(layout.roomTarget), fov: 67 },
+  upstairs: { position: [0.05, 5.1, -2.5], target: point(layout.upstairsTarget), fov: 78 },
+  nook: { position: [-5.2, 2.15, 3.0], target: [-6.2, .95, -.95], fov: 86 },
+  lounge: { position: [-0.1, 3.2, 4.1], target: point(layout.loungeTarget), fov: 78 },
+  projects: { position: [workbenchCenter[0], projectView.cameraHeight, workbenchCenter[2]], target: workbenchCenter, up: [0, 0, -1], fov: projectView.mobileFov },
+  computer: { position: computerPoint([-1.71, 1.78, 0.55]), target: computerPoint([-1.71, 1.63, -2.37]), fov: 72 },
+  experience: { position: experiencePoint([3.03, 2.75, 1.1]), target: experiencePoint([3.03, 2.7, -4.43]), fov: 86 },
   about: { position: ABOUT_SHELF_MOBILE_CAMERA, target: ABOUT_SHELF_MOBILE_TARGET, fov: 65 },
   contact: { position: contactDoorView.mobile.position, target: contactDoorView.mobile.target, fov: contactDoorView.mobile.fov },
 }
 
-function CameraDirector({ focus, reducedMotion, mobile }: Pick<Props, 'focus' | 'reducedMotion' | 'mobile'>) {
-  const { camera, pointer } = useThree()
-  const state = useRef({ x: 0.2, y: 3.3, z: 8.6, tx: 0, ty: 2.15, tz: -0.8, ux: 0, uy: 1, uz: 0, fov: 46 })
+function CameraDirector({ focus, selectedArtifact, reducedMotion, mobile }: Pick<Props, 'focus' | 'selectedArtifact' | 'reducedMotion' | 'mobile'>) {
+  const { camera, pointer, size } = useThree()
+  const state = useRef({ x: layout.roomCamera[0], y: layout.roomCamera[1], z: layout.roomCamera[2], tx: layout.roomTarget[0], ty: layout.roomTarget[1], tz: layout.roomTarget[2], ux: 0, uy: 1, uz: 0, fov: 46 })
   const parallax = useRef({ x: 0, y: 0 })
   const initialized = useRef(false)
+  const previousFocus = useRef(focus)
 
   useEffect(() => {
-    const mark = mobile ? mobileMarks[focus] ?? marks[focus] : marks[focus]
+    const mark: CameraMark = selectedArtifact ? artifactView(selectedArtifact, size.width / size.height) : mobile ? mobileMarks[focus] ?? marks[focus] : marks[focus]
     const pos = mark.position
     const target = mark.target
     const up = mark.up ?? [0, 1, 0]
@@ -88,7 +104,9 @@ function CameraDirector({ focus, reducedMotion, mobile }: Pick<Props, 'focus' | 
       x: pos[0], y: pos[1], z: pos[2],
       tx: target[0], ty: target[1], tz: target[2],
       ux: up[0], uy: up[1], uz: up[2],
-      fov: mark.fov ?? 46,
+      fov: Math.min(focus === 'projects' ? 120 : 105, Math.max(mark.fov ?? 46,
+        ['room', 'lounge'].includes(focus)
+          ? THREE.MathUtils.radToDeg(2 * Math.atan(Math.tan(THREE.MathUtils.degToRad(focus === 'room' ? 37 : 34)) / (size.width / size.height))) : 0)),
     }
     if (reducedMotion || !initialized.current) {
       camera.position.set(values.x, values.y, values.z)
@@ -103,18 +121,23 @@ function CameraDirector({ focus, reducedMotion, mobile }: Pick<Props, 'focus' | 
       return
     }
     const targetObject = { ...state.current }
-    const tween = gsap.to(targetObject, {
+    const tween = gsap.timeline()
+    if (focus === 'upstairs' || previousFocus.current === 'upstairs') {
+      tween.to(targetObject, { x: -1.4, y: 4.95, z: -2.65, tx: -4.1, ty: 4.2, tz: -4.5, duration: 1.1, ease: 'power2.inOut', onUpdate: () => { Object.assign(state.current, targetObject) } })
+    }
+    previousFocus.current = focus
+    tween.to(targetObject, {
       ...values,
       duration: focus === 'room' ? 1.5 : 1.8,
       ease: 'power3.inOut',
       onUpdate: () => { Object.assign(state.current, targetObject) },
     })
     return () => { tween.kill() }
-  }, [camera, focus, mobile, reducedMotion])
+  }, [camera, focus, selectedArtifact, mobile, reducedMotion, size.width, size.height])
 
   useFrame((_, delta) => {
     const s = state.current
-    const roomParallax = focus === 'room' && !mobile && !reducedMotion
+    const roomParallax = ['room', 'upstairs', 'lounge', 'nook'].includes(focus) && !mobile && !reducedMotion
     const targetX = roomParallax ? pointer.x * 0.055 : 0
     const targetY = roomParallax ? -pointer.y * 0.035 : 0
     parallax.current.x = THREE.MathUtils.damp(parallax.current.x, targetX, 4.5, delta)
@@ -147,22 +170,50 @@ function HitBox({ position, size, onClick, enabled = true }: {
   )
 }
 
-function Model({ onReady, focus, selectedProject }: { onReady: () => void, focus: Focus, selectedProject: number | null }) {
+function Model({ onReady }: { onReady: () => void }) {
   const { gl } = useThree()
   const url = `${import.meta.env.BASE_URL}models/loft-room.glb`
   const { scene } = useGLTF(url)
-  const model = useMemo(() => {
+  const { model, dispose } = useMemo(() => {
     const clone = scene.clone(true)
     applyChairShelfFixes(clone)
     applyDoorPosterFixes(clone)
     applyLoftShellFixes(clone)
-    return clone
+    // Keep the stand behind the display; DOM text previously hid this overlap.
+    clone.traverse((object) => {
+      const name = normalizedObjectName(object.name)
+      if (/^monitorstandneck\d*$/.test(name)) object.position.z = computerPoint([0, 0, -2.52])[2]
+      if (/^monitorswivelhinge\d*$/.test(name)) object.position.z = computerPoint([0, 0, -2.526])[2]
+    })
+    clone.traverse((child) => {
+      if (child instanceof THREE.Mesh) {
+        const name = normalizedObjectName(child.name)
+        const proceduralStair = /^(?:floatingstairtread|stairsiderail|ascendinghandrail|stairstringer)\d*$/.test(name)
+        const blueprintAsset = /^project[123]blueprint(?:paper|artwork)\d*$/.test(name)
+        const hideBlueprintAssets = blueprintAsset
+        let collectionOwner: THREE.Object3D | null = child
+        const collectionPattern = /^(?:experiencedisplayframe|experiencetimelineartwork|personalshelf|shelfsteel|shelfbook|shelfceramic|shelfphoto|pinboardaboveshelf|pinnedcard|americanfootball|vintagevideocamera|headphone)/
+        while (collectionOwner && !collectionPattern.test(normalizedObjectName(collectionOwner.name))) collectionOwner = collectionOwner.parent
+        const replaceCollection = collectionOwner !== null
+        const replaceMonitorGraphic = /^portfoliosummaryonscreen\d*$/.test(name)
+        child.visible = !proceduralStair && !child.userData.doorPosterHidden && !child.userData.loftShellReplaced &&
+          !hideBlueprintAssets && !replaceMonitorGraphic && !replaceCollection
+      }
+    })
+    clone.traverse((child) => {
+      if (child instanceof THREE.Mesh) {
+        child.receiveShadow = true
+        child.castShadow = !/(?:glass|pane)/i.test(child.name)
+      }
+    })
+    const dispose = batchStaticMeshes(clone)
+    return { model: clone, dispose }
   }, [scene])
   useEffect(() => {
     model.traverse((child) => {
       if (child instanceof THREE.Mesh) {
         child.receiveShadow = true
-        child.castShadow = !child.name.includes('floor') && !child.name.includes('wall')
+        child.castShadow = !/(?:glass|pane)/i.test(child.name)
         const materials = Array.isArray(child.material) ? child.material : [child.material]
         for (const material of materials) {
           if (material instanceof THREE.MeshStandardMaterial) {
@@ -174,6 +225,16 @@ function Model({ onReady, focus, selectedProject }: { onReady: () => void, focus
                 texture.needsUpdate = true
               }
             }
+            if (material.name === 'studio woven floor textile') {
+              material.color.set('#737d79')
+              material.roughness = 1
+              material.normalScale.set(.22, .22)
+            }
+            if (material.name === 'lounge woven linen') {
+              material.color.set('#8faaa6')
+              material.roughness = .95
+            }
+            if (/mid_century_lounge_chair/.test(material.name)) material.roughness = Math.max(material.roughness, .72)
             if (material.name === 'warm plaster') {
               material.normalScale.set(0.035, 0.035)
               material.roughness = Math.max(material.roughness, 0.94)
@@ -186,90 +247,11 @@ function Model({ onReady, focus, selectedProject }: { onReady: () => void, focus
         }
       }
     })
+    gl.shadowMap.needsUpdate = true
     onReady()
   }, [gl, model, onReady])
-  useEffect(() => {
-    model.traverse((child) => {
-      if (child instanceof THREE.Mesh) {
-        const name = normalizedObjectName(child.name)
-        const proceduralStair = /^(?:floatingstairtread|stairsiderail|ascendinghandrail|stairstringer)\d*$/.test(name)
-        const blueprintAsset = /^project[123]blueprint(?:paper|artwork)\d*$/.test(name)
-        const hideBlueprintAssets = blueprintAsset && focus === 'projects' && selectedProject !== null
-        const replaceMonitorGraphic = focus === 'computer' && /^portfoliosummaryonscreen\d*$/.test(name)
-        child.visible = !proceduralStair && !child.userData.doorPosterHidden && !child.userData.loftShellReplaced &&
-          !hideBlueprintAssets && !replaceMonitorGraphic &&
-          (focus !== 'projects' || !/(?:ceiling|beam|pendant)/.test(name))
-      }
-    })
-  }, [focus, model, selectedProject])
-  return <primitive object={model} />
-}
-
-const blueprintStarts: [number, number, number][] = [
-  [0.86, 0.997, 0.72],
-  [2.48, 0.997, 0.93],
-  [3.78, 0.997, 1.41],
-]
-
-function FloatingBlueprint({ index, content, reducedMotion, mobile }: {
-  index: number
-  content: ReactNode
-  reducedMotion: boolean
-  mobile: boolean
-}) {
-  const groupRef = useRef<THREE.Group>(null)
-  const { scene } = useGLTF(`${import.meta.env.BASE_URL}models/loft-room.glb`)
-  const start = blueprintStarts[index]
-  const cardParts = useMemo(() => {
-    const group = new THREE.Group()
-    const paper = findNamedObject(scene, `project ${index + 1} blueprint paper`) as THREE.Mesh | undefined
-    const artwork = findNamedObject(scene, `project ${index + 1} blueprint artwork`) as THREE.Mesh | undefined
-    if (paper) {
-      const paperClone = paper.clone()
-      paperClone.position.sub(new THREE.Vector3(...start))
-      group.add(paperClone)
-    }
-    if (artwork) {
-      const artworkClone = artwork.clone()
-      artworkClone.geometry = artwork.geometry.clone()
-      artworkClone.geometry.translate(-start[0], -start[1], -start[2])
-      group.add(artworkClone)
-    }
-    return group
-  }, [index, scene, start])
-
-  useEffect(() => {
-    const group = groupRef.current
-    if (!group) return
-    const destination: [number, number, number] = [workbenchCenter[0], mobile ? 2.72 : 3.25, workbenchCenter[2]]
-    const scale = mobile ? 2.35 : 1.48
-    if (reducedMotion) {
-      group.position.set(...destination)
-      group.rotation.set(0, 0, 0)
-      group.scale.setScalar(scale)
-      return
-    }
-    const motion = gsap.timeline({ defaults: { duration: 1.35, ease: 'power3.inOut' } })
-    motion.to(group.position, { x: destination[0], y: destination[1], z: destination[2] }, 0)
-    motion.to(group.scale, { x: scale, y: scale, z: scale }, 0)
-    return () => { motion.kill() }
-  }, [index, mobile, reducedMotion])
-
-  useEffect(() => () => {
-    cardParts.traverse((object) => {
-      if (object instanceof THREE.Mesh) {
-        const sourceArtwork = findNamedObject(scene, `project ${index + 1} blueprint artwork`) as THREE.Mesh | undefined
-        if (object.geometry !== sourceArtwork?.geometry) object.geometry.dispose()
-      }
-    })
-  }, [cardParts, index, scene])
-
-  return <group ref={groupRef} position={start}>
-    <primitive object={cardParts} dispose={null} />
-    <Html center position={[0, 0.009, 0]} zIndexRange={[9, 8]} distanceFactor={mobile ? 5.1 : 3.8}>
-      {content}
-    </Html>
-  </group>
+  useEffect(() => dispose, [dispose])
+  return <primitive object={model} dispose={null} />
 }
 
 function StairBeam({ start, end, radius, material }: {
@@ -293,7 +275,7 @@ function StairBeam({ start, end, radius, material }: {
   </mesh>
 }
 
-function Staircase() {
+function Staircase({ onEnter, interactive }: { onEnter: () => void, interactive: boolean }) {
   const { scene } = useGLTF(`${import.meta.env.BASE_URL}models/loft-room.glb`)
   const wood = useMemo(() => {
     const tread = findNamedObject(scene, 'floating stair tread') as THREE.Mesh | undefined
@@ -329,9 +311,12 @@ function Staircase() {
     end: [steps[steps.length - 1].x - 0.67, steps[steps.length - 1].y - 0.16, steps[steps.length - 1].z] as [number, number, number],
   }), [steps])
 
-  return <group>
+  return <group scale={point(layout.shellScale)}>
     {steps.map((step, index) => <RoundedBox key={index} position={[step.x, step.y, step.z]} args={[1.26, 0.12, 0.46]}
-      radius={0.018} smoothness={3} material={wood} castShadow receiveShadow />)}
+      radius={0.018} smoothness={3} material={wood} castShadow receiveShadow
+      onClick={interactive ? (event) => { event.stopPropagation(); onEnter() } : undefined}
+      onPointerOver={interactive ? () => { document.body.style.cursor = 'pointer' } : undefined}
+      onPointerOut={() => { document.body.style.cursor = '' }} />)}
     <StairBeam {...stringer} radius={0.075} material={steel} />
     {railPosts.map((post, index) => <StairBeam key={`post-${index}`} {...post} radius={0.022} material={steel} />)}
     <StairBeam {...handrail} radius={0.038} material={steel} />
@@ -353,40 +338,38 @@ function WebGLContextGuard({ onError }: { onError: () => void }) {
   return null
 }
 
-function LoftContent({ focus, selectedProject, reducedMotion, mobile, weather, onFocus, onProject, onReady,
-  computerContent, projectContent }: Omit<Props, 'onError'>) {
-  return <LoftEnvironment weather={weather}>
-    <spotLight position={[2.2, 5.4, 1]} angle={0.72} penumbra={0.88} intensity={74}
-      distance={13} color="#ffc58b" castShadow shadow-mapSize={[2048, 2048]} shadow-bias={-0.0003}
+function LoftContent({ focus, selectedProject, selectedArtifact, onArtifact, reducedMotion, mobile, weather, onFocus, onProject, onReady,
+  onBackToBlueprints }: Omit<Props, 'onError'>) {
+  const taskTarget = useMemo(() => { const target = new THREE.Object3D(); target.position.set(...benchPoint([2.28, .92, 1.04])); return target }, [])
+  return <LoftEnvironment weather={weather} reducedMotion={reducedMotion}>
+    <Suspense fallback={null}><Environment files={`${import.meta.env.BASE_URL}environments/studio_small_03_1k.hdr`} environmentIntensity={.1} background={false} /></Suspense>
+    <primitive object={taskTarget} />
+    <spotLight target={taskTarget} position={benchPoint([2.28, 5.06, 1.04])} angle={0.72} penumbra={1} intensity={60}
+      distance={8} color="#ffe0b9" castShadow shadow-mapSize={[2048, 2048]} shadow-bias={-0.0003}
       shadow-normalBias={0.025} />
-    <pointLight position={[-1.3, 3.0, -1.8]} intensity={11} distance={6.5} color="#ffc47b" />
-    <pointLight position={[5, 3, -3]} intensity={8} distance={4.5} color="#efc59b" />
-    <pointLight position={[-4.1, 2.78, -0.1]} intensity={6.5} distance={5.5} color="#e6a86c" />
-    <pointLight position={[-0.3, 3.63, -0.7]} intensity={5} distance={4.8} color="#e6a86c" />
-    <pointLight position={[3.7, 5.32, -1.2]} intensity={4.2} distance={4.6} color="#e6a86c" />
+    <pointLight position={computerPoint([-1.3, 3.0, -1.8])} intensity={11} distance={6.5} color="#ffc47b" />
+    <pointLight position={shellPoint([5, 3, -3])} intensity={8} distance={4.5} color="#efc59b" />
+    <pointLight position={shellPoint([-4.1, 2.78, -0.1])} intensity={6.5} distance={5.5} color="#e6a86c" />
+    <pointLight position={shellPoint([-0.3, 3.63, -0.7])} intensity={5} distance={4.8} color="#e6a86c" />
+    <pointLight position={shellPoint([3.7, 5.32, -1.2])} intensity={4.2} distance={4.6} color="#e6a86c" />
     <LoftCity mobile={mobile} reducedMotion={reducedMotion} />
-    <Model onReady={onReady} focus={focus} selectedProject={selectedProject} />
-    <Staircase />
-    <HitBox position={[-1.75, 1.55, -2.37]} size={[2, 1.4, 0.4]} onClick={() => onFocus('computer')} enabled={focus === 'room'} />
-    <HitBox position={[2.3, 1.02, 1.05]} size={[5.6, 0.3, 2.8]} onClick={() => onFocus('projects')} enabled={focus === 'room'} />
-    {focus === 'computer' && <Html center position={[-1.71, 1.63, -2.355]} zIndexRange={[9, 8]} distanceFactor={mobile ? 4.2 : 2}>
-      {computerContent}
-    </Html>}
-    <HitBox position={[2.74, 2.63, -4.12]} size={[3.25, 2.3, 0.35]} onClick={() => onFocus('experience')} enabled={focus === 'room'} />
+    <WindowSunlight mobile={mobile} reducedMotion={reducedMotion} />
+    <Model onReady={onReady} />
+    <Staircase onEnter={() => onFocus('upstairs')} interactive={focus === 'room'} />
+    <PersonalArtifacts focus={focus} selectedArtifact={selectedArtifact} reducedMotion={reducedMotion} onArtifact={onArtifact} onFocus={onFocus} />
+    <LivingSpaces focus={focus} onFocus={onFocus} reducedMotion={reducedMotion} mobile={mobile} />
+    <HitBox position={computerPoint([-1.75, 1.55, -2.37])} size={[2, 1.4, 0.4]} onClick={() => onFocus('computer')} enabled={focus === 'room'} />
+    <HitBox position={benchPoint([2.3, 1.02, 1.05])} size={[5.6 * benchScale, 0.3, 2.8 * benchScale]} onClick={() => onFocus('projects')} enabled={focus === 'room'} />
+    <MonitorSurface active={focus === 'computer'} reducedMotion={reducedMotion} onFocus={onFocus} />
+    <HitBox position={experiencePoint([2.74, 2.63, -4.12])} size={[3.25, 2.3, 0.35]} onClick={() => onFocus('experience')} enabled={focus === 'room'} />
     <HitBox position={ABOUT_SHELF_HITBOX_POSITION} size={ABOUT_SHELF_HITBOX_SIZE} onClick={() => onFocus('about')} enabled={focus === 'room'} />
     <HitBox position={contactDoorView.hotspot.position} size={contactDoorView.hotspot.size} onClick={() => onFocus('contact')} enabled={focus === 'room'} />
-    {blueprintStarts.map(([x, y, z], index) => (
-      <group key={index}>
-        <HitBox position={[x, y + 0.13, z]} size={[1.54, 0.15, 1.13]}
-          enabled={focus === 'projects' && selectedProject === null} onClick={() => onProject(index)} />
-        {focus === 'projects' && selectedProject === null && <Html center position={[x, y + 0.15, z]} zIndexRange={[9, 8]}>
-          <BlueprintButton index={index} onSelect={() => onProject(index)} />
-        </Html>}
-      </group>
-    ))}
-    {focus === 'projects' && selectedProject !== null &&
-      <FloatingBlueprint index={selectedProject} content={projectContent} reducedMotion={reducedMotion} mobile={mobile} />}
-    <CameraDirector focus={focus} reducedMotion={reducedMotion} mobile={mobile} />
+    {[0, 1, 2].map((index) => <ProjectSheet key={index} index={index}
+      selected={focus === 'projects' && selectedProject === index}
+      enabled={focus === 'projects' && selectedProject === null}
+      mobile={mobile} reducedMotion={reducedMotion} onSelect={() => onProject(index)} onBack={onBackToBlueprints} />)}
+    <ProjectFocus active={focus === 'projects' && selectedProject !== null} mobile={mobile} />
+    <CameraDirector focus={focus} selectedArtifact={selectedArtifact} reducedMotion={reducedMotion} mobile={mobile} />
   </LoftEnvironment>
 }
 
@@ -399,10 +382,12 @@ class SceneBoundary extends React.Component<{ children: ReactNode, onError: () =
 
 export default function LoftScene(props: Props) {
   return <SceneBoundary onError={props.onError}>
-    <Canvas className="loft-canvas" shadows={props.mobile ? false : { type: THREE.PCFShadowMap }} dpr={props.mobile ? [1, 1.15] : [1, 1.8]}
-      camera={{ position: [0.2, 3.3, 8.6], fov: 46, near: 0.1, far: 65 }}
+    <Canvas className="loft-canvas" shadows={props.mobile ? false : { type: THREE.PCFShadowMap }} dpr={props.mobile ? [1, 1.15] : [1, 1.5]}
+      camera={{ position: point(layout.roomCamera), fov: 52, near: 0.1, far: 100 }}
       gl={{ antialias: true, powerPreference: 'high-performance', toneMapping: THREE.ACESFilmicToneMapping }}
       onCreated={({ gl }) => { gl.toneMappingExposure = 0.88; gl.domElement.setAttribute('aria-hidden', 'true') }}>
+      <RenderBudget mobile={props.mobile} focus={props.focus} selectedProject={props.selectedProject} selectedArtifact={props.selectedArtifact} />
+      {import.meta.env.DEV && <RenderStats />}
       <WebGLContextGuard onError={props.onError} />
       <Suspense fallback={null}>
         <LoftContent {...props} />

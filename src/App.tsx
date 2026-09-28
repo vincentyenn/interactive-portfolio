@@ -1,12 +1,12 @@
 import { Component, Suspense, lazy, useCallback, useEffect, useRef, useState, type MouseEvent, type ReactNode } from 'react'
 import type { Focus } from './LoftScene'
 import portfolio from '../content/portfolio.json'
-import { ComputerScreen, ProjectScreen } from './WorldScreens'
+import { artifactById } from './roomArtifacts'
 import { getVisitWeather, type Weather } from './visitWeather'
 
 const LoftScene = lazy(() => import('./LoftScene'))
 const ThreepipeAssetPreview = lazy(() => import('./ThreepipeAssetPreview'))
-type SectionFocus = Exclude<Focus, 'room'>
+type SectionFocus = Exclude<Focus, 'room' | 'upstairs' | 'lounge' | 'nook'>
 
 class SceneImportBoundary extends Component<{ children: ReactNode, onError: () => void }, { failed: boolean }> {
   state = { failed: false }
@@ -23,11 +23,12 @@ const sections: { id: SectionFocus, number: string, label: string, object: strin
   { id: 'contact', number: '05', label: 'Contact', object: 'The doorway' },
 ]
 
-type RouteState = { focus: Focus, selectedProject: number | null }
+type RouteState = { focus: Focus, selectedProject: number | null, selectedArtifact?: string | null }
 
 function routeFromHash(hash: string): RouteState {
   const parts = hash.replace(/^#\/?/, '').split('/').filter(Boolean)
   if (!parts.length || (parts.length === 1 && parts[0] === 'room')) return { focus: 'room', selectedProject: null }
+  if (parts.length === 1 && (parts[0] === 'upstairs' || parts[0] === 'lounge' || parts[0] === 'nook')) return { focus: parts[0], selectedProject: null }
   if (parts.length === 1 && parts[0] === 'overview') return { focus: 'computer', selectedProject: null }
   if (parts[0] === 'projects') {
     if (parts.length === 1) return { focus: 'projects', selectedProject: null }
@@ -37,6 +38,10 @@ function routeFromHash(hash: string): RouteState {
     }
     return { focus: 'room', selectedProject: null }
   }
+  if (parts.length === 2 && (parts[0] === 'experience' || parts[0] === 'about')) {
+    const artifact = artifactById(parts[1])
+    if (artifact?.section === parts[0]) return { focus: artifact.section, selectedProject: null, selectedArtifact: artifact.id }
+  }
   if (parts.length === 1 && (parts[0] === 'experience' || parts[0] === 'about' || parts[0] === 'contact')) {
     return { focus: parts[0], selectedProject: null }
   }
@@ -44,6 +49,7 @@ function routeFromHash(hash: string): RouteState {
 }
 
 function hashForRoute(route: RouteState): string {
+  if (route.selectedArtifact) return `#/${route.focus}/${route.selectedArtifact}`
   if (route.focus === 'room') return '#/room'
   if (route.focus === 'computer') return '#/overview'
   if (route.focus === 'projects') {
@@ -185,7 +191,7 @@ export default function App() {
     }
     return initial
   })
-  const { focus, selectedProject } = route
+  const { focus, selectedProject, selectedArtifact = null } = route
   const [weather] = useState<Weather>(() => getVisitWeather())
   const [sceneReady, setSceneReady] = useState(false)
   const [sceneFailed, setSceneFailed] = useState(() => !canUseWebGL() || new URLSearchParams(window.location.search).has('no3d'))
@@ -203,6 +209,10 @@ export default function App() {
     setRoute(next)
   }, [])
 
+  const onArtifact = useCallback((id: string) => {
+    const item = artifactById(id)
+    if (item) navigate({ focus: item.section, selectedProject: null, selectedArtifact: id })
+  }, [navigate])
   const onFocus = useCallback((next: Focus) => navigate({ focus: next, selectedProject: null }), [navigate])
   const onBack = useCallback((from: SectionFocus, keyboard: boolean) => {
     navigate({ focus: 'room', selectedProject: null })
@@ -217,7 +227,6 @@ export default function App() {
     }
     navigate({ focus: 'projects', selectedProject: null })
   }, [navigate])
-  const activeProject = selectedProject === null ? null : portfolio.projects[selectedProject]
 
   useEffect(() => {
     const syncRoute = () => {
@@ -253,7 +262,7 @@ export default function App() {
     if (index === null || focus !== 'projects' || selectedProject !== null) return
     const frame = requestAnimationFrame(() => {
       const worldBlueprint = document.querySelector<HTMLButtonElement>(
-        `.world-blueprint-button[data-blueprint-index="${index}"]`,
+        `.world-blueprint-target[data-blueprint-index="${index}"]`,
       )
       if (sceneReady && !sceneFailed && worldBlueprint) {
         worldBlueprint.focus({ preventScroll: true })
@@ -276,6 +285,18 @@ export default function App() {
     requestAnimationFrame(() => navLinksRef.current.computer?.focus({ preventScroll: true }))
   }
 
+  useEffect(() => {
+    const returnToRoom = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && focus !== 'room') {
+        if (selectedArtifact) onFocus(focus)
+        else if (focus === 'projects' && selectedProject !== null) onBackToBlueprints()
+        else onFocus('room')
+      }
+    }
+    window.addEventListener('keydown', returnToRoom)
+    return () => window.removeEventListener('keydown', returnToRoom)
+  }, [focus, selectedProject, selectedArtifact, onFocus, onBackToBlueprints])
+
   const projectOpen = focus === 'projects' && selectedProject !== null
   return <main ref={heroRef} tabIndex={-1} className={`hero ${focus !== 'room' ? 'is-focused' : ''} ${sceneFailed ? 'scene-failed' : ''} ${projectOpen ? 'project-open' : ''}`} aria-label="Interactive loft portfolio">
     <a className="skip-link" href="#page-navigation" onClick={focusRoomNavigation}>Skip the 3D scene</a>
@@ -283,11 +304,8 @@ export default function App() {
     <p className="visually-hidden">The exterior city weather for this visit is {weather}.</p>
     <div className="scene-layer">
       {!sceneFailed && <SceneImportBoundary onError={onError}><Suspense fallback={null}>
-        <LoftScene focus={focus} selectedProject={selectedProject} reducedMotion={reducedMotion} mobile={mobile} weather={weather}
-          computerContent={<ComputerScreen onNavigate={onFocus} />}
-          projectContent={activeProject && selectedProject !== null
-            ? <ProjectScreen project={activeProject} index={selectedProject} onBack={onBackToBlueprints} />
-            : null}
+        <LoftScene focus={focus} selectedProject={selectedProject} selectedArtifact={selectedArtifact} onArtifact={onArtifact} reducedMotion={reducedMotion} mobile={mobile} weather={weather}
+          onBackToBlueprints={onBackToBlueprints}
           onFocus={onFocus} onProject={onProject} onReady={onReady} onError={onError} />
       </Suspense></SceneImportBoundary>}
     </div>
@@ -303,9 +321,15 @@ export default function App() {
         </a>)}
       </nav>
     </header>
+    {!sceneFailed && <nav className="room-navigation" aria-label="Explore the loft">
+      {([['room', 'Studio'], ['upstairs', 'Upstairs'], ['nook', 'Listening nook'], ['lounge', 'Lounge']] as const).map(([destination, label]) =>
+        <a key={destination} href={`#/${destination}`} aria-current={focus === destination ? 'location' : undefined}
+          onClick={(event) => { event.preventDefault(); onFocus(destination) }}>{label}</a>)}
+    </nav>}
+    <span className="visually-hidden" role="status">{focus === 'nook' ? 'Listening nook. Use the stereo to play or pause music and change tracks, or switch the reading lamp.' : focus === 'upstairs' ? 'Upstairs reading nook. Use the lamp or open the journal.' : focus === 'lounge' ? 'Lounge. Switch the lamp, control the music, or browse the project archive.' : ''}</span>
     {!sceneReady && !sceneFailed && <div className="scene-status visually-hidden" role="status">Preparing the loft…</div>}
     {sceneFailed && <div className="scene-fallback" role="status"><span>3D VIEW UNAVAILABLE</span><p>The room could not load. Use the destinations to explore this portfolio.</p></div>}
-    {focus !== 'room' && (sceneFailed || (focus !== 'computer' && focus !== 'projects')) && <FocusPanel focus={focus} selectedProject={selectedProject} sceneAvailable={!sceneFailed}
+    {focus !== 'room' && (sceneFailed || (focus !== 'computer' && focus !== 'projects' && focus !== 'experience' && focus !== 'about')) && <FocusPanel focus={focus} selectedProject={selectedProject} sceneAvailable={!sceneFailed}
       onNavigate={navigate} onBack={onBack} onBackToBlueprints={onBackToBlueprints} />}
   </main>
 }

@@ -22,11 +22,15 @@ TEXTURES = (
     "oak_wood_planks",
     "oak_veneer_01",
     "brick_wall_10",
+    "rough_linen",
 )
 MODELS = (
     "american_football",
     "desk_lamp_arm_01",
     "modern_arm_chair_01",
+    "modern_wooden_cabinet",
+    "mid_century_lounge_chair",
+    "potted_plant_04",
 )
 
 

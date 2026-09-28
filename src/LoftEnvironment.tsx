@@ -1,6 +1,7 @@
 import { createContext, useContext, useMemo, useRef, type ReactNode } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
+import { shellPoint } from './loftLayout'
 import type { Weather } from './visitWeather'
 
 export type DayPhase = 'day' | 'sunset' | 'night'
@@ -11,6 +12,8 @@ export type LoftEnvironmentState = {
   daylight: number
   windowGlow: number
   cycleSeconds: number
+  directSun: number
+  sunColor: THREE.Color
 }
 
 const EnvironmentContext = createContext<LoftEnvironmentState | null>(null)
@@ -99,53 +102,67 @@ function sampleCycle(seconds: number) {
   }
 }
 
-function DynamicLighting({ state }: { state: LoftEnvironmentState }) {
+function DynamicLighting({ state, reducedMotion }: { state: LoftEnvironmentState, reducedMotion: boolean }) {
   const { scene, gl } = useThree()
   const ambientRef = useRef<THREE.AmbientLight>(null)
   const hemisphereRef = useRef<THREE.HemisphereLight>(null)
   const sunRef = useRef<THREE.DirectionalLight>(null)
+  const windowBounce = useRef<THREE.PointLight>(null)
   const practicalLights = useRef<Array<THREE.PointLight | null>>([])
+  const weatherTint = useMemo(() => new THREE.Color(state.weather === 'thunderstorm' ? '#52616f' : '#9caeb9'), [state.weather])
+  const cloudCover = { clear: 0, cloudy: .68, rain: .86, thunderstorm: .97, snow: .8 }[state.weather]
+  const sunTarget = useMemo(() => new THREE.Object3D(), [])
   const skyRef = useRef(new THREE.Color('#8ba9b2'))
   const fogRef = useRef(new THREE.Fog('#83979d', 15, 58))
   const practicalPositions: [number, number, number][] = [
     [-4.6, 5.2, -2.55], [-1.55, 5.2, -2.55], [1.55, 5.2, -2.55], [4.6, 5.2, -2.55],
     [-4.6, 5.2, 1.8], [-1.55, 5.2, 1.8], [1.55, 5.2, 1.8], [4.6, 5.2, 1.8],
+    [-4, 5.2, 7.6], [0, 5.2, 7.6], [4, 5.2, 7.6],
+    [-4, 5.2, 10.3], [0, 5.2, 10.3], [4, 5.2, 10.3],
   ]
 
   useFrame(({ clock }) => {
-    const sampled = sampleCycle(clock.elapsedTime)
-    state.cycleSeconds = clock.elapsedTime % 360
+    const seconds = reducedMotion ? 36 : clock.elapsedTime
+    const sampled = sampleCycle(seconds)
+    state.cycleSeconds = seconds % 360
+    state.directSun = THREE.MathUtils.smoothstep(sampled.daylight, .2, .85) * (1 - cloudCover) ** 2
+    state.sunColor.copy(sampled.sun)
     state.daylight = sampled.daylight
     state.windowGlow = THREE.MathUtils.lerp(0.08, 1.45, 1 - sampled.daylight)
     state.phase = sampled.progress < 0.32 || sampled.progress >= 0.93
       ? 'day'
       : sampled.progress < 0.48 ? 'sunset' : 'night'
 
-    skyRef.current.copy(sampled.sky)
-    fogRef.current.color.copy(sampled.fog)
-    fogRef.current.near = sampled.fogNear
-    fogRef.current.far = sampled.fogFar
+    skyRef.current.copy(sampled.sky).lerp(weatherTint, cloudCover * sampled.daylight * .65)
+    fogRef.current.color.copy(sampled.fog).lerp(weatherTint, cloudCover * sampled.daylight * .52)
+    fogRef.current.near = sampled.fogNear + 5
+    fogRef.current.far = sampled.fogFar * (1 - cloudCover * .25)
     scene.background = skyRef.current
     scene.fog = fogRef.current
 
     if (ambientRef.current) {
       ambientRef.current.color.copy(sampled.ambient)
-      ambientRef.current.intensity = 0.22 + sampled.daylight * 0.33
+      ambientRef.current.intensity = 0.22 + sampled.daylight * (.33 - cloudCover * .1)
     }
     if (hemisphereRef.current) {
       hemisphereRef.current.color.copy(sampled.hemisphereSky)
       hemisphereRef.current.groundColor.copy(sampled.hemisphereGround)
-      hemisphereRef.current.intensity = 0.38 + sampled.daylight * 0.4
+      hemisphereRef.current.intensity = 0.38 + sampled.daylight * (.4 - cloudCover * .1)
     }
     if (sunRef.current) {
       sunRef.current.color.copy(sampled.sun)
-      sunRef.current.intensity = 0.08 + sampled.daylight * 0.96
-      const solarArc = sampled.progress * Math.PI * 2
-      sunRef.current.position.set(-3 + Math.cos(solarArc) * 1.5, 4.5 + Math.sin(solarArc) * 2.2, -1.5)
+      sunRef.current.intensity = .08 + state.directSun * 2.15
+      // Match the window shafts; keeping direction stable avoids crawling shadow texels.
+      sunRef.current.position.set(-8.8, 12.4, -20)
     }
+    if (windowBounce.current) windowBounce.current.intensity = sampled.daylight * (state.weather === 'clear' ? 9 : 5)
     const nightLevel = 1 - THREE.MathUtils.smoothstep(sampled.daylight, 0.22, 0.78)
     for (const light of practicalLights.current) {
-      if (light) light.intensity = nightLevel * 12
+      if (light) {
+        light.intensity = nightLevel * 12
+        // Zero-intensity lights still enlarge Three's per-pixel light loop.
+        light.visible = nightLevel > 0
+      }
     }
     gl.toneMappingExposure = sampled.exposure
   })
@@ -153,25 +170,32 @@ function DynamicLighting({ state }: { state: LoftEnvironmentState }) {
   return <>
     <ambientLight ref={ambientRef} intensity={0.46} color="#bec9c2" />
     <hemisphereLight ref={hemisphereRef} args={['#a9c5d0', '#4a4439', 0.71]} />
-    <directionalLight ref={sunRef} position={[-3, 7, -1.5]} intensity={1.04} color="#f4dfc3" />
+    <pointLight ref={windowBounce} position={[-1.6, 4.5, -5.2]} color="#d5e5ef" intensity={0} distance={11} decay={2} />
+    <primitive object={sunTarget} />
+    <directionalLight ref={sunRef} target={sunTarget} position={[-8.8, 12.4, -20]} intensity={1.04} color="#f4dfc3"
+      castShadow shadow-mapSize={[2048, 2048]} shadow-camera-left={-13} shadow-camera-right={13}
+      shadow-camera-top={12} shadow-camera-bottom={-12} shadow-camera-near={1} shadow-camera-far={55}
+      shadow-bias={-.00012} shadow-normalBias={.035} />
     {practicalPositions.map((position, index) => <pointLight key={index}
       ref={(light) => { practicalLights.current[index] = light }}
-      position={position} intensity={0} distance={9.5} decay={1.6}
+      position={shellPoint(position)} intensity={0} distance={12} decay={1.6}
       color={index % 2 === 0 ? '#ffd2a2' : '#ffe0bd'} castShadow={false} />)}
   </>
 }
 
-export default function LoftEnvironment({ weather, children }: { weather: Weather, children: ReactNode }) {
+export default function LoftEnvironment({ weather, reducedMotion, children }: { weather: Weather, reducedMotion: boolean, children: ReactNode }) {
   const state = useMemo<LoftEnvironmentState>(() => ({
     weather,
     phase: 'day',
     daylight: 1,
     windowGlow: 0.08,
     cycleSeconds: 0,
+    directSun: 0,
+    sunColor: new THREE.Color('#ffe2ad'),
   }), [weather])
 
   return <EnvironmentContext.Provider value={state}>
-    <DynamicLighting state={state} />
+    <DynamicLighting state={state} reducedMotion={reducedMotion} />
     {children}
   </EnvironmentContext.Provider>
 }

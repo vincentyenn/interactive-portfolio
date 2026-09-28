@@ -1,16 +1,18 @@
 import { Box3, Group, Quaternion, Vector3, type Object3D } from 'three'
 
+import layout, { computerPoint, point } from './loftLayout'
+
 type Point = [number, number, number]
 
 export const ABOUT_SHELF_SOURCE: Point = [-4.72, 0, -2.67]
-export const ABOUT_SHELF_ANCHOR: Point = [5.64, 0, -1.2]
-export const ABOUT_SHELF_OFFSET: Point = [10.36, 0, 1.47]
+export const ABOUT_SHELF_ANCHOR: Point = point(layout.shelfAnchor)
+export const ABOUT_SHELF_OFFSET: Point = [layout.shelfAnchor[0] + 4.72, 0, layout.shelfAnchor[2] + 2.67]
 export const ABOUT_SHELF_YAW = -Math.PI / 2
-export const ABOUT_SHELF_TARGET: Point = [5.58, 1.5, -1.2]
-export const ABOUT_SHELF_CAMERA: Point = [0.45, 2.05, -1.2]
-export const ABOUT_SHELF_MOBILE_CAMERA: Point = [1, 2.7, -1.2]
-export const ABOUT_SHELF_MOBILE_TARGET: Point = [5.58, 0.7, -1.2]
-export const ABOUT_SHELF_HITBOX_POSITION: Point = [5.62, 1.5, -1.2]
+export const ABOUT_SHELF_TARGET: Point = [7.36, 1.5, 0.2]
+export const ABOUT_SHELF_CAMERA: Point = [2.23, 2.05, 0.2]
+export const ABOUT_SHELF_MOBILE_CAMERA: Point = [2.78, 2.7, 0.2]
+export const ABOUT_SHELF_MOBILE_TARGET: Point = [7.36, 1.6, 0.2]
+export const ABOUT_SHELF_HITBOX_POSITION: Point = [7.4, 1.5, 0.2]
 export const ABOUT_SHELF_HITBOX_SIZE: Point = [0.85, 3.05, 2.3]
 
 const shelfPrefixes = [
@@ -42,7 +44,7 @@ export function applyChairShelfFixes(root: Object3D): void {
     const rotation = chair.getWorldQuaternion(new Quaternion())
       .premultiply(root.getWorldQuaternion(new Quaternion()).invert())
     const forward = new Vector3(0, 0, 1).applyQuaternion(rotation)
-    const towardDesk = new Vector3(-1.72, 0, -2.11).sub(center)
+    const towardDesk = new Vector3(...computerPoint([-1.72, 0, -2.11])).sub(center)
     const pivot = new Group()
     pivot.name = 'chair-facing-computer'
     pivot.position.copy(center)

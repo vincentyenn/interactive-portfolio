@@ -1,17 +1,19 @@
 import * as THREE from 'three'
 import portfolio from '../content/portfolio.json'
 
+import layout, { offsetPoint } from './loftLayout'
+
 type Point3 = [number, number, number]
 
 /** Coordinates stay aligned with the GLB's room space as the camera moves. */
 export const contactDoorView = {
-  hotspot: { position: [5.97, 1.55, -3.52] as Point3, size: [0.38, 3.18, 1.94] as Point3 },
-  desktop: { position: [1.35, 2.1, -1] as Point3, target: [5.98, 1.72, -2.8] as Point3, fov: 42 },
-  mobile: { position: [1.85, 2.35, -2.8] as Point3, target: [5.98, 1.28, -3.4] as Point3, fov: 59 },
+  hotspot: { position: offsetPoint([5.97, 1.55, -3.52], [1.79, 0, -0.8]), size: [0.38, 3.18, 1.94] as Point3 },
+  desktop: { position: offsetPoint([1.35, 2.1, -1], [1.79, 0, -0.8]), target: offsetPoint([5.98, 1.72, -2.8], [1.79, 0, -0.8]), fov: 42 },
+  mobile: { position: offsetPoint([1.85, 2.35, -2.8], [1.79, 0, -0.8]), target: offsetPoint([5.98, 1.28, -3.4], [1.79, 0, -0.8]), fov: 59 },
 }
 
 const FIX_VERSION = 'door-poster-v1'
-const DOOR_CENTER_Z = -3.4
+const DOOR_CENTER_Z = layout.doorDepth
 const normalizedName = (name: string) => name.toLowerCase().replace(/[\s_.]+/g, ' ').trim()
 
 function findMesh(root: THREE.Object3D, name: string): THREE.Mesh | undefined {

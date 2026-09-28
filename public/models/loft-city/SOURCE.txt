@@ -2,7 +2,11 @@ Modular Urban Apartments Facade
 Source: https://polyhaven.com/a/modular_urban_apartments_facade
 Artist: James Ray Cock
 License: CC0 1.0 Universal, https://polyhaven.com/license
-Format: glTF 2.0, 1K texture set
-Use: exterior city facade for the loft portfolio scene
-Local changes: loaded as a separate scene and scaled/positioned behind the loft's rear window apertures; original geometry and maps are preserved. Additional skyline towers and window lights are authored in src/LoftCity.tsx.
+Format: glTF 2.0, 1K PBR textures (1K texture set)
+
+The original facade module is kept intact. The portfolio loads it as a separate
+scene outside the loft, scaled and positioned behind the rear window apertures.
+It is combined with custom procedural skyline geometry and deterministic window
+lights authored in src/LoftCity.tsx; the original geometry and maps are preserved.
+
 Bundled payload: 16,488,693 bytes excluding this source note
