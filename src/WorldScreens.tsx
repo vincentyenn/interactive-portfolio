@@ -2,19 +2,26 @@ import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 
 import portfolio from '../content/portfolio.json'
 import type { Focus } from './LoftScene'
 
-type TerminalLine = { id: number, kind: 'system' | 'command' | 'output' | 'link', text: string, href?: string }
+type TerminalLine = { id: number, kind: 'system' | 'command' | 'output' | 'link' | 'heading' | 'entry', text: string, href?: string }
+
+const openingLines: TerminalLine[] = [
+  { id: 0, kind: 'heading', text: '01 / ABOUT' },
+  { id: 1, kind: 'entry', text: `NAME ............ ${portfolio.name}` },
+  { id: 2, kind: 'entry', text: `ROLE ............ ${portfolio.role}` },
+  { id: 3, kind: 'entry', text: 'STUDY ........... Texas A&M / Computer Science + Cybersecurity' },
+  { id: 4, kind: 'entry', text: 'BUILDING ........ Geospatial tools / AI / web applications' },
+  { id: 5, kind: 'output', text: portfolio.summary },
+  { id: 6, kind: 'system', text: 'SELECT A SECTION ABOVE OR TYPE HELP TO EXPLORE.' },
+]
 
 export function usePortfolioTerminal(onNavigate: (focus: Focus) => void) {
   const inputRef = useRef<HTMLInputElement>(null)
   const outputRef = useRef<HTMLDivElement>(null)
   const commandHistory = useRef<string[]>([])
   const historyCursor = useRef(0)
-  const nextLineId = useRef(2)
+  const nextLineId = useRef(openingLines.length)
   const [draft, setDraft] = useState('')
-  const [lines, setLines] = useState<TerminalLine[]>([
-    { id: 0, kind: 'system', text: 'VINCENT YEN · PORTFOLIO TERMINAL' },
-    { id: 1, kind: 'system', text: 'Type help to explore. Type room to leave the computer.' },
-  ])
+  const [lines, setLines] = useState<TerminalLine[]>(openingLines)
 
   useEffect(() => {
     if (outputRef.current) outputRef.current.scrollTop = outputRef.current.scrollHeight
@@ -38,55 +45,69 @@ export function usePortfolioTerminal(onNavigate: (focus: Focus) => void) {
     }
 
     if (command === 'clear') {
-      setLines([makeLine('system', 'Terminal cleared. Type help to continue.')])
+      setLines([makeLine('heading', 'INDEX / CLEARED'), makeLine('system', 'TYPE HELP TO SEE THE AVAILABLE COMMANDS.')])
       return
     }
 
     const response: TerminalLine[] = []
+    const heading = (text: string) => response.push(makeLine('heading', text))
+    const entry = (text: string) => response.push(makeLine('entry', text))
     const output = (text: string) => response.push(makeLine('output', text))
     const link = (label: string, href: string) => response.push(makeLine('link', label, href))
     switch (command) {
       case 'help':
-        output('COMMANDS  whoami  about  education  experience  projects  skills  contact  github  linkedin  clear  room')
-        output('Use room, back, or exit to return to the loft.')
+        heading('COMMAND INDEX')
+        entry('PROFILE ...... whoami / about / education / skills')
+        entry('WORK ......... experience / projects')
+        entry('CONNECT ...... contact / github / linkedin')
+        entry('SYSTEM ....... clear / room / back / exit')
         break
       case 'whoami':
-        output(`${portfolio.name} · ${portfolio.role}`)
+        heading('IDENTITY / WHOAMI')
+        entry(`NAME ......... ${portfolio.name}`)
+        entry(`ROLE ......... ${portfolio.role}`)
         output(portfolio.summary)
         break
       case 'about':
+        heading('ABOUT')
         output(portfolio.about)
         break
       case 'education':
-        output(portfolio.education)
+        heading('EDUCATION')
+        entry(portfolio.education)
         break
       case 'experience':
+        heading('EXPERIENCE')
         portfolio.experience.forEach((item) => {
-          output(`${item.role} · ${item.company} · ${item.period}`)
+          entry(`${item.role} / ${item.company} / ${item.period}`)
           output(item.summary)
         })
         break
       case 'projects':
+        heading('PROJECT INDEX')
         portfolio.projects.forEach((project, index) => {
-          output(`0${index + 1}  ${project.title} · ${project.category} · ${project.status}`)
+          entry(`0${index + 1} / ${project.title} / ${project.category}`)
           output(project.summary)
           project.highlights.forEach(output)
           project.links.forEach((item) => link(item.label, item.url))
         })
         break
       case 'skills':
-        output(`TECHNICAL TOOLKIT  ${portfolio.skills.join(' · ')}`)
+        heading('TECHNICAL TOOLKIT')
+        output(portfolio.skills.join(' / '))
         break
       case 'contact':
-        output('Find me online:')
+        heading('CONTACT / LINKS')
         link('GitHub', portfolio.links.github)
         link('LinkedIn', portfolio.links.linkedin)
         link('Devpost', portfolio.links.devpost)
         break
       case 'github':
+        heading('GITHUB')
         link('Open GitHub profile', portfolio.links.github)
         break
       case 'linkedin':
+        heading('LINKEDIN')
         link('Open LinkedIn profile', portfolio.links.linkedin)
         break
       default:
@@ -204,9 +225,12 @@ export function ProjectScreen({ project, index, onBack }: {
         <p className="world-screen-kicker">BUILT WITH</p>
         <ul>{project.tools.map((tool) => <li key={tool}>{tool}</li>)}</ul>
       </div>
-      <div className="world-project-highlights">
-        <p className="world-screen-kicker">PROJECT NOTES</p>
-        <ul>{project.highlights.map((highlight) => <li key={highlight}>{highlight}</li>)}</ul>
+      <div className="world-project-sections">
+        {project.sections.map((section) => <section key={section.heading}>
+          <h3>{section.heading}</h3>
+          <p>{section.body}</p>
+          {section.points && <ul>{section.points.map((point) => <li key={point}>{point}</li>)}</ul>}
+        </section>)}
       </div>
       <div className="world-project-links">
         {project.links.map((link) => <a key={link.url} href={link.url} target="_blank" rel="noreferrer">

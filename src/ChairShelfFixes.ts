@@ -1,19 +1,15 @@
 import { Box3, Group, Quaternion, Vector3, type Object3D } from 'three'
 
-import layout, { computerPoint, point } from './loftLayout'
+import { computerPoint } from './loftLayout'
 
 type Point = [number, number, number]
 
-export const ABOUT_SHELF_SOURCE: Point = [-4.72, 0, -2.67]
-export const ABOUT_SHELF_ANCHOR: Point = point(layout.shelfAnchor)
-export const ABOUT_SHELF_OFFSET: Point = [layout.shelfAnchor[0] + 4.72, 0, layout.shelfAnchor[2] + 2.67]
-export const ABOUT_SHELF_YAW = -Math.PI / 2
-export const ABOUT_SHELF_TARGET: Point = [7.36, 1.5, 0.2]
-export const ABOUT_SHELF_CAMERA: Point = [2.23, 2.05, 0.2]
-export const ABOUT_SHELF_MOBILE_CAMERA: Point = [2.78, 2.7, 0.2]
-export const ABOUT_SHELF_MOBILE_TARGET: Point = [7.36, 1.6, 0.2]
-export const ABOUT_SHELF_HITBOX_POSITION: Point = [7.4, 1.5, 0.2]
-export const ABOUT_SHELF_HITBOX_SIZE: Point = [0.85, 3.05, 2.3]
+export const ABOUT_SHELF_TARGET: Point = [7.07, 2.04, 0.2]
+export const ABOUT_SHELF_CAMERA: Point = [2.72, 2.95, 0.2]
+export const ABOUT_SHELF_MOBILE_CAMERA: Point = [1.3, 3.25, 0.2]
+export const ABOUT_SHELF_MOBILE_TARGET: Point = [7.07, 2.04, 0.2]
+export const ABOUT_SHELF_HITBOX_POSITION: Point = [6.9, 2.04, 0.2]
+export const ABOUT_SHELF_HITBOX_SIZE: Point = [0.7, 3.05, 4.55]
 
 const shelfPrefixes = [
   'personalshelf', 'shelfsteel', 'shelfbook', 'shelfceramic',
@@ -55,26 +51,14 @@ export function applyChairShelfFixes(root: Object3D): void {
     pivot.rotation.y = Math.atan2(towardDesk.x, towardDesk.z) - Math.atan2(forward.x, forward.z)
   }
 
-  if (shelfNodes.length) {
-    const shelf = new Group()
-    shelf.name = 'about-shelf-position'
-    shelf.position.set(...ABOUT_SHELF_SOURCE)
-    root.add(shelf)
-    root.updateMatrixWorld(true)
-    const moving = new Set(shelfNodes)
-    for (const object of shelfNodes) {
-      let parent = object.parent
-      while (parent && parent !== root && !moving.has(parent)) parent = parent.parent
-      if (parent && moving.has(parent)) continue
-      shelf.attach(object)
-      if (key(object).startsWith('pinboardaboveshelf') || key(object).startsWith('pinnedcard')) {
-        // Remount the wall art behind the shelf instead of carrying its old wall gap.
-        object.position.x -= -4.05 - ABOUT_SHELF_SOURCE[0]
-        object.position.z = -0.355 + object.position.z - (-3.92 - ABOUT_SHELF_SOURCE[2])
-      }
-    }
-    shelf.position.set(...ABOUT_SHELF_ANCHOR)
-    shelf.rotation.y = ABOUT_SHELF_YAW
+  // The wall collection is rendered as one recessed unit. Remove the former
+  // floating shelf and its props from this GLB clone so they cannot overlap it.
+  const moving = new Set(shelfNodes)
+  for (const object of shelfNodes) {
+    let parent = object.parent
+    while (parent && parent !== root && !moving.has(parent)) parent = parent.parent
+    if (parent && moving.has(parent)) continue
+    object.parent?.remove(object)
   }
 
   root.userData.chairShelfFixesApplied = true

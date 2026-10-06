@@ -75,6 +75,12 @@ button:focus-visible,a:focus-visible{outline:2px solid #f3b783;outline-offset:4p
 .detail-meta{display:grid;gap:7px;border-top:1px solid rgba(255,255,255,.2);margin:18px 0 20px;padding-top:12px;color:#c2c9be;line-height:1.5;overflow-wrap:anywhere}
 .project-highlights{display:grid;gap:9px;margin:0 0 20px;padding:0 0 0 17px;color:#c5cec2;font-size:11px;line-height:1.55}
 .project-highlights li::marker{color:#e2ae80}
+.project-detail-sections{display:grid;gap:15px;margin:0 0 20px}
+.project-detail-sections section{padding-top:12px;border-top:1px solid rgba(255,255,255,.14)}
+.project-detail-sections h3{margin:0 0 6px;color:#e2ae80;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:.09em;text-transform:uppercase}
+.project-detail-sections p,.project-detail-sections ul{margin:0;color:#c5cec2;font-size:11px;line-height:1.55}
+.project-detail-sections ul{display:grid;gap:5px;margin-top:7px;padding-left:15px}
+.project-detail-sections li::marker{color:#e2ae80}
 .text-link{display:inline-flex;gap:12px;align-items:center;border-bottom:1px solid #946846;padding-bottom:5px;color:#edbd91;font-size:12px;font-weight:700}
 .project-external-links{display:flex;flex-wrap:wrap;gap:12px 18px}
 .project-photo-gallery{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin:12px 0 15px}
@@ -96,6 +102,33 @@ button:focus-visible,a:focus-visible{outline:2px solid #f3b783;outline-offset:4p
 .about-photo-gallery figure{min-width:0;margin:0}
 .about-photo-gallery img{display:block;width:100%;aspect-ratio:1/1;object-fit:cover;border:1px solid rgba(234,213,184,.26)}
 .about-photo-gallery figcaption{margin-top:5px;color:#aeb8ad;font-size:8px;line-height:1.35}
+.about-object-picker{margin:18px 0 22px;border-top:1px solid rgba(255,255,255,.2)}
+.about-object-open .site-header,.about-object-open .room-navigation{visibility:hidden}
+.about-object-open .scene-vignette{display:none}
+.about-inspection{position:absolute;z-index:20;inset:0;display:grid;grid-template-columns:58% 42%;color:#eceeee;pointer-events:none}
+.about-inspection-visual{min-width:0;display:grid;place-items:center}
+.about-inspection-info{min-width:0;overflow-y:auto;overscroll-behavior:contain;padding:clamp(30px,4.5vw,78px) clamp(28px,4.5vw,82px) 44px 34px;border-left:1px solid rgba(205,211,214,.28);background:#070809;pointer-events:auto;scrollbar-width:thin;scrollbar-color:#555 #101112}
+.about-inspection-info{animation:about-inspection-enter .65s .22s both}
+@keyframes about-inspection-enter{from{opacity:0;transform:translateX(18px)}to{opacity:1;transform:translateX(0)}}
+@media (prefers-reduced-motion:reduce){.about-inspection-info{animation:none}}
+.about-inspection-close{display:block;margin:0 0 clamp(44px,9vh,110px);padding:0;border:0;background:none;color:#dce0e1;font-family:'DM Mono',monospace;font-size:12px;text-align:left}
+.about-inspection-close span{color:#9ca9af}
+.about-inspection-close:hover{color:#fff}
+.about-inspection-content{max-width:600px}
+.about-inspection-kicker{margin:0 0 13px;color:#94a7af;font-family:'DM Mono',monospace;font-size:10px;line-height:1.4;letter-spacing:.1em;text-transform:uppercase}
+.about-inspection h2{margin:0 0 24px;color:#f1f1ef;font-size:clamp(35px,3.6vw,61px);font-weight:600;line-height:1.04;letter-spacing:-.055em}
+.about-inspection-facts{margin:0 0 26px;border-top:1px solid #3f4548}
+.about-inspection-facts div{display:grid;grid-template-columns:minmax(100px,35%) 1fr;gap:14px;padding:8px 0;border-bottom:1px solid #3f4548;font-size:13px;line-height:1.35}
+.about-inspection-facts dt{color:#87949a}
+.about-inspection-facts dd{margin:0;color:#d7d9d9}
+.about-inspection-body{margin:0;color:#d9ddde;font-size:15px;line-height:1.55}
+.about-inspection-photos{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:25px}
+.about-inspection-photos:has(figure:only-child){grid-template-columns:minmax(0,220px)}
+.about-inspection-photos figure{min-width:0;margin:0}
+.about-inspection-photos img{display:block;width:100%;aspect-ratio:1;object-fit:cover;border:1px solid #454c50}
+.about-inspection-photos figcaption{margin-top:5px;color:#9eaaad;font-size:10px;line-height:1.35}
+.about-inspection-fallback{width:min(58%,430px);color:#c8ced1;font-family:'DM Mono',monospace;font-size:16px;text-align:center}
+.about-inspection-fallback img{display:block;width:100%;max-height:70vh;object-fit:contain}
 .contact-primary{display:flex;align-items:center;justify-content:space-between;padding:15px 16px;margin:24px 0 12px;background:#e7ac76;color:#1a211e;font-size:12px;font-weight:700}
 .contact-primary:hover{background:#ffd0a0}
 
@@ -157,9 +190,12 @@ button:focus-visible,a:focus-visible{outline:2px solid #f3b783;outline-offset:4p
 .world-project-facts dd{margin:0;color:#e9eee4;font-size:12px}
 .world-project-tools ul{display:flex;flex-wrap:wrap;gap:6px;margin:0;padding:0;list-style:none}
 .world-project-tools li{padding:2px 0;color:#d9e8e2;font-family:'DM Mono',monospace;font-size:9px}
-.world-project-highlights{margin-top:19px}
-.world-project-highlights ul{display:grid;gap:7px;margin:0;padding:0 0 0 16px;color:#e2e8de;font-size:12px;line-height:1.5}
-.world-project-highlights li::marker{color:#e3ae79}
+.world-project-sections{display:grid;gap:18px;margin-top:20px}
+.world-project-sections section{padding-top:12px;border-top:1px solid rgba(151,197,201,.36)}
+.world-project-sections h3{margin:0 0 7px;color:#e3ae79;font-family:'DM Mono',monospace;font-size:10px;font-weight:500;letter-spacing:.12em;text-transform:uppercase}
+.world-project-sections p,.world-project-sections ul{margin:0;color:#e2e8de;font-size:12px;line-height:1.55}
+.world-project-sections ul{display:grid;gap:5px;margin-top:8px;padding-left:16px}
+.world-project-sections li::marker{color:#e3ae79}
 .world-project-links{display:grid;gap:7px;margin-top:18px}
 .world-project-links a{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:9px 0;border-top:1px solid rgba(151,197,201,.42);color:#f0bd8d;font-family:'DM Mono',monospace;font-size:10px;letter-spacing:.04em;text-transform:uppercase}
 .world-project-links a:hover{color:#fff0d9}
@@ -186,6 +222,16 @@ button:focus-visible,a:focus-visible{outline:2px solid #f3b783;outline-offset:4p
 }
 
 @media(max-width:700px){
+  .about-inspection{display:block}
+  .about-inspection-visual{height:47%}
+  .about-inspection-info{position:absolute;inset:47% 0 0;padding:16px 23px 25px;border-left:0;border-top:1px solid rgba(205,211,214,.28);background:#080a0c}
+  .about-inspection-close{margin-bottom:24px;font-size:11px}
+  .about-inspection-kicker{font-size:8px}
+  .about-inspection h2{font-size:32px;margin-bottom:17px}
+  .about-inspection-facts div{grid-template-columns:90px 1fr;font-size:11px}
+  .about-inspection-body{font-size:12px}
+  .about-inspection-photos{margin-top:17px}
+  .about-inspection-photos figcaption{font-size:8px}
   .hero{height:100dvh;min-height:0}
   .site-header{top:max(10px,env(safe-area-inset-top));width:calc(100% - 20px);max-width:460px;padding:4px}
   .site-nav{justify-content:space-between;gap:0}

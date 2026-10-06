@@ -1,9 +1,10 @@
 import { Component, Suspense, lazy, useCallback, useEffect, useRef, useState, type MouseEvent, type ReactNode } from 'react'
 import type { Focus } from './LoftScene'
 import portfolio from '../content/portfolio.json'
-import { artifactById } from './roomArtifacts'
+import { aboutObjects, artifactById } from './roomArtifacts'
 import { getVisitWeather, type Weather } from './visitWeather'
 import StudioWireframeLoader from './StudioWireframeLoader'
+import AboutObjectOverlay from './AboutObjectOverlay'
 
 const LoftScene = lazy(() => import('./LoftScene'))
 type SectionFocus = Exclude<Focus, 'room' | 'upstairs' | 'lounge' | 'nook'>
@@ -153,7 +154,13 @@ function FocusPanel({ focus, selectedProject, sceneAvailable, onNavigate, onBack
       </div>
       <p className="panel-lead">{project.summary}</p>
       <div className="detail-meta"><span>{project.year} · {project.status}</span><span>{project.tools.join(' / ')}</span></div>
-      <ul className="project-highlights">{project.highlights.map((highlight) => <li key={highlight}>{highlight}</li>)}</ul>
+      <div className="project-detail-sections" aria-label={`${project.title} project specifics`}>
+        {project.sections.map((section) => <section key={section.heading}>
+          <h3>{section.heading}</h3>
+          <p>{section.body}</p>
+          {section.points && <ul>{section.points.map((point) => <li key={point}>{point}</li>)}</ul>}
+        </section>)}
+      </div>
       <div className="project-external-links">
         {project.links.map((link) => <a className="text-link" key={link.url} href={link.url} target="_blank" rel="noreferrer">{link.label} <Arrow diagonal /></a>)}
       </div>
@@ -171,6 +178,12 @@ function FocusPanel({ focus, selectedProject, sceneAvailable, onNavigate, onBack
       <p className="eyebrow">The personal shelf · About me</p>
       <h2 ref={headingRef} tabIndex={-1}>About<br /><em>me.</em></h2>
       <p className="panel-lead">{portfolio.about}</p>
+      {!sceneAvailable && <div className="about-object-picker" role="group" aria-label="Explore personal objects">
+        {aboutObjects.map((object) => <button key={object.id} type="button" className="panel-row"
+          onClick={() => onNavigate({ focus: 'about', selectedProject: null, selectedArtifact: object.id })}>
+          <span>{object.title}</span><Arrow />
+        </button>)}
+      </div>}
       <div className="about-photo-gallery" aria-label="Photos from Vincent's life">
         {portfolio.aboutPhotos.map((photo) => <figure key={photo.src}>
           <img src={`${import.meta.env.BASE_URL}${photo.src}`} alt={photo.alt} />
@@ -211,6 +224,7 @@ export default function App() {
     return initial
   })
   const { focus, selectedProject, selectedArtifact = null } = route
+  const selectedAboutObject = aboutObjects.find((item) => item.id === selectedArtifact)
   const [weather] = useState<Weather>(() => getVisitWeather())
   const [sceneReady, setSceneReady] = useState(false)
   const [sceneFailed, setSceneFailed] = useState(() => !canUseWebGL() || new URLSearchParams(window.location.search).has('no3d'))
@@ -258,6 +272,13 @@ export default function App() {
     }
     navigate({ focus: 'projects', selectedProject: null })
   }, [navigate])
+  const onBackToShelf = useCallback(() => {
+    const previousId = selectedArtifact
+    onFocus('about')
+    requestAnimationFrame(() => {
+      if (previousId) document.querySelector<HTMLButtonElement>(`[data-about-artifact-id="${previousId}"]`)?.focus({ preventScroll: true })
+    })
+  }, [onFocus, selectedArtifact])
 
   useEffect(() => {
     const syncRoute = () => {
@@ -319,17 +340,18 @@ export default function App() {
   useEffect(() => {
     const returnToRoom = (event: KeyboardEvent) => {
       if (event.key === 'Escape' && focus !== 'room') {
-        if (selectedArtifact) onFocus(focus)
+        if (selectedAboutObject) onBackToShelf()
+        else if (selectedArtifact) onFocus(focus)
         else if (focus === 'projects' && selectedProject !== null) onBackToBlueprints()
         else onFocus('room')
       }
     }
     window.addEventListener('keydown', returnToRoom)
     return () => window.removeEventListener('keydown', returnToRoom)
-  }, [focus, selectedProject, selectedArtifact, onFocus, onBackToBlueprints])
+  }, [focus, selectedProject, selectedArtifact, selectedAboutObject, onFocus, onBackToBlueprints, onBackToShelf])
 
   const projectOpen = focus === 'projects' && selectedProject !== null
-  return <main ref={heroRef} tabIndex={-1} className={`hero ${focus !== 'room' ? 'is-focused' : ''} ${sceneFailed ? 'scene-failed' : ''} ${projectOpen ? 'project-open' : ''}`} aria-label="Interactive loft portfolio">
+  return <main ref={heroRef} tabIndex={-1} className={`hero ${focus !== 'room' ? 'is-focused' : ''} ${sceneFailed ? 'scene-failed' : ''} ${projectOpen ? 'project-open' : ''} ${selectedAboutObject ? 'about-object-open' : ''}`} aria-label="Interactive loft portfolio">
     <a className="skip-link" href="#page-navigation" onClick={focusRoomNavigation}>Skip the 3D scene</a>
     <h1 className="visually-hidden">Vincent Yen’s interactive portfolio</h1>
     <p className="visually-hidden">The exterior city weather for this visit is {weather}.</p>
@@ -363,5 +385,6 @@ export default function App() {
     {sceneFailed && <div className="scene-fallback" role="status"><span>3D VIEW UNAVAILABLE</span><p>The room could not load. Use the destinations to explore this portfolio.</p></div>}
     {focus !== 'room' && (sceneFailed || (focus !== 'computer' && focus !== 'projects' && focus !== 'experience' && focus !== 'about' && focus !== 'contact')) && <FocusPanel focus={focus} selectedProject={selectedProject} sceneAvailable={!sceneFailed}
       onNavigate={navigate} onBack={onBack} onBackToBlueprints={onBackToBlueprints} />}
+    {selectedAboutObject && <AboutObjectOverlay item={selectedAboutObject} sceneAvailable={!sceneFailed} onClose={onBackToShelf} />}
   </main>
 }

@@ -1,53 +1,10 @@
-import { useEffect, useMemo, useState } from 'react'
-import { Html, RoundedBox, useGLTF } from '@react-three/drei'
+import { useEffect, useState } from 'react'
+import { Html, RoundedBox } from '@react-three/drei'
 import type { ThreeEvent } from '@react-three/fiber'
-import * as THREE from 'three'
-import { AboutSurface, useSurface, wrap } from './ObjectSurfaces'
-import { roomArtifacts, shelfPoint, type Artifact } from './roomArtifacts'
+import { useSurface, wrap } from './ObjectSurfaces'
+import { aboutObjects, roomArtifacts, type Artifact } from './roomArtifacts'
+import AboutShelf, { AboutInspectionStage } from './AboutShelf'
 import type { Focus } from './LoftScene'
-
-const key = (value: string) => value.toLowerCase().replace(/[^a-z0-9]/g, '')
-
-function ExistingProp({ prefix, width, position }: {
-  prefix: string, width: number, position: [number, number, number]
-}) {
-  const { scene } = useGLTF(`${import.meta.env.BASE_URL}models/loft-room.glb`)
-  const band = useMemo(() => new THREE.CatmullRomCurve3([
-    new THREE.Vector3(-.18, -.06, -.13), new THREE.Vector3(-.2, .19, -.13),
-    new THREE.Vector3(0, .27, -.13), new THREE.Vector3(.2, .19, -.13),
-    new THREE.Vector3(.18, -.06, -.13),
-  ]), [])
-  const model = useMemo(() => {
-    scene.updateMatrixWorld(true)
-    const group = new THREE.Group()
-    scene.traverse((node) => {
-      if (!(node instanceof THREE.Mesh)) return
-      let owner: THREE.Object3D | null = node
-      while (owner && !key(owner.name).startsWith(prefix)) owner = owner.parent
-      if (!owner) return
-      const geometry = node.geometry.clone().applyMatrix4(node.matrixWorld)
-      const mesh = new THREE.Mesh(geometry, node.material)
-      mesh.castShadow = mesh.receiveShadow = true
-      group.add(mesh)
-    })
-    const bounds = new THREE.Box3().setFromObject(group)
-    if (!bounds.isEmpty()) {
-      const center = bounds.getCenter(new THREE.Vector3())
-      const size = bounds.getSize(new THREE.Vector3())
-      const factor = width / Math.max(size.x, size.z, .01)
-      group.scale.setScalar(factor)
-      group.position.set(-center.x * factor, -bounds.min.y * factor, -center.z * factor)
-    }
-    return group
-  }, [scene, prefix, width])
-  useEffect(() => () => model.traverse((node) => { if (node instanceof THREE.Mesh) node.geometry.dispose() }), [model])
-  return <group position={position}><primitive object={model} dispose={null} />
-    {prefix === 'headphone' && <mesh position={[0, .32, .13]} castShadow>
-      <tubeGeometry args={[band, 32, .026, 10, false]} />
-      <meshStandardMaterial color="#212625" roughness={.75} />
-    </mesh>}
-  </group>
-}
 
 function ArtifactPrint({ item, selected, focused, onSelect, onBack, width, height }: {
   item: Artifact, selected: boolean, focused: boolean, onSelect: () => void,
@@ -112,14 +69,6 @@ function CollectionObject({ item, focus, selected, onSelect, onBack }: {
   const [focused, setFocused] = useState(false)
   const interactive = focus === item.section
 
-  if (item.id === 'about-me') return <group position={item.position} rotation={[0, -Math.PI / 2, 0]}>
-    <RoundedBox args={[item.width + .075, item.height + .075, .085]} radius={.012} castShadow>
-      <meshStandardMaterial color="#596b5d" metalness={.12} roughness={.62} />
-    </RoundedBox>
-    <AboutSurface selected={selected} focused={focused || selected} width={item.width} height={item.height}
-      onOpen={onSelect} onBack={onBack} />
-  </group>
-
   return <group position={item.position}>
     <RoundedBox args={[item.width + .075, item.height + .075, .085]} radius={.012} castShadow>
       <meshStandardMaterial color={item.id === 'usaa' ? '#64736b' : '#242927'} metalness={.4} roughness={.5} />
@@ -140,53 +89,17 @@ function CollectionObject({ item, focus, selected, onSelect, onBack }: {
   </group>
 }
 
-function FloatingWallShelves() {
-  const { scene } = useGLTF(`${import.meta.env.BASE_URL}models/loft-room.glb`)
-  const wood = useMemo(() => {
-    let material: THREE.Material | undefined
-    scene.traverse((node) => {
-      if (!material && node instanceof THREE.Mesh && key(node.name).startsWith('personalshelf')) {
-        material = Array.isArray(node.material) ? node.material[0] : node.material
-      }
-    })
-    return material
-  }, [scene])
-  return <group name="floating wall shelves" position={[7.42, 0, .2]} rotation={[0, -Math.PI / 2, 0]}>
-    {[.62, 1.43, 2.27].map((height) => <group key={height} position={[0, height, .04]}>
-      <RoundedBox args={[2.4, .095, .94]} radius={.015} castShadow receiveShadow>
-        {wood ? <primitive object={wood} attach="material" /> : <meshStandardMaterial color="#71543b" roughness={.8} />}
-      </RoundedBox>
-      <mesh position={[0, -.029, -.437]}><boxGeometry args={[2.28, .035, .025]} /><meshStandardMaterial color="#292c26" roughness={.8} /></mesh>
-      <mesh position={[0, -.051, -.36]} rotation={[-Math.PI / 2, 0, 0]}><planeGeometry args={[2.1, .018]} /><meshBasicMaterial color="#ddbb86" /></mesh>
-    </group>)}
-  </group>
-}
-
-// These personal objects stay as shelf decor; the single About Me folio holds all of their context.
-function ShelfPersonalityProps() {
-  return <group name="personal shelf objects">
-    <group position={shelfPoint(-.5, 1.76, .45)} rotation={[0, -Math.PI / 2, 0]}>
-      <ExistingProp prefix="vintagevideocamera" width={.48} position={[.36, -.28, -.1]} />
-    </group>
-    <group position={shelfPoint(.52, 1.79, .24)} rotation={[0, -Math.PI / 2, 0]}>
-      <ExistingProp prefix="headphone" width={.53} position={[0, -.32, -.13]} />
-    </group>
-    <group position={shelfPoint(-.5, .91, .3)} rotation={[0, -Math.PI / 2, 0]}>
-      <ExistingProp prefix="americanfootball" width={.57} position={[0, -.2, -.11]} />
-    </group>
-  </group>
-}
-
-export default function PersonalArtifacts({ focus, selectedArtifact, onArtifact, onFocus }: {
-  focus: Focus, selectedArtifact: string | null,
+export default function PersonalArtifacts({ focus, selectedArtifact, mobile, reducedMotion, onArtifact, onFocus }: {
+  focus: Focus, selectedArtifact: string | null, mobile: boolean, reducedMotion: boolean,
   onArtifact: (id: string) => void, onFocus: (focus: Focus) => void
 }) {
+  const selectedAbout = aboutObjects.find((item) => item.id === selectedArtifact)
   return <group name="personal collections">
-    <FloatingWallShelves />
-    <ShelfPersonalityProps />
+    <AboutShelf focus={focus} selectedArtifact={selectedArtifact} onArtifact={onArtifact} />
     <pointLight position={[5.7, 3.4, -.6]} intensity={14} color="#ffe0b9" distance={5.5} decay={2} />
     {roomArtifacts.map((item) => <CollectionObject key={item.id} item={item} focus={focus}
       selected={selectedArtifact === item.id && focus === item.section}
       onSelect={() => onArtifact(item.id)} onBack={() => onFocus(item.section)} />)}
+    {selectedAbout && focus === 'about' && <AboutInspectionStage item={selectedAbout} mobile={mobile} reducedMotion={reducedMotion} />}
   </group>
 }

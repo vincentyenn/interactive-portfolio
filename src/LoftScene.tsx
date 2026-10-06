@@ -26,7 +26,7 @@ import PersonalArtifacts from './PersonalArtifacts'
 import ContactConsole from './ContactConsole'
 import { batchStaticMeshes } from './batchStaticMeshes'
 import { RenderBudget, RenderStats } from './RenderBudget'
-import { artifactView } from './roomArtifacts'
+import { artifactById, artifactView } from './roomArtifacts'
 
 export type Focus = 'room' | 'computer' | 'projects' | 'experience' | 'about' | 'contact' | 'upstairs' | 'lounge' | 'nook'
 type Props = {
@@ -73,7 +73,7 @@ const marks: Record<Focus, CameraMark> = {
   computer: { position: computerPoint([-1.64, 1.9, 0.18]), target: computerPoint([-1.72, 1.58, -2.42]), fov: 41 },
   projects: { position: [workbenchCenter[0], projectView.cameraHeight, workbenchCenter[2]], target: workbenchCenter, up: [0, 0, -1], fov: projectView.fov },
   experience: { position: experiencePoint([3.03, 2.75, .3]), target: experiencePoint([3.03, 2.7, -4.43]), fov: 50 },
-  about: { position: ABOUT_SHELF_CAMERA, target: ABOUT_SHELF_TARGET, fov: 48 },
+  about: { position: ABOUT_SHELF_CAMERA, target: ABOUT_SHELF_TARGET, fov: 46 },
   contact: { position: contactConsoleView.desktop.position, target: contactConsoleView.desktop.target, fov: contactConsoleView.desktop.fov },
 }
 
@@ -85,7 +85,7 @@ const mobileMarks: Partial<Record<Focus, CameraMark>> = {
   projects: { position: [workbenchCenter[0], projectView.cameraHeight, workbenchCenter[2]], target: workbenchCenter, up: [0, 0, -1], fov: projectView.mobileFov },
   computer: { position: computerPoint([-1.71, 1.78, 0.55]), target: computerPoint([-1.71, 1.63, -2.37]), fov: 72 },
   experience: { position: experiencePoint([3.03, 2.75, 1.1]), target: experiencePoint([3.03, 2.7, -4.43]), fov: 86 },
-  about: { position: ABOUT_SHELF_MOBILE_CAMERA, target: ABOUT_SHELF_MOBILE_TARGET, fov: 65 },
+  about: { position: ABOUT_SHELF_MOBILE_CAMERA, target: ABOUT_SHELF_MOBILE_TARGET, fov: 86 },
   contact: { position: contactConsoleView.mobile.position, target: contactConsoleView.mobile.target, fov: contactConsoleView.mobile.fov },
 }
 
@@ -97,15 +97,21 @@ function CameraDirector({ focus, selectedArtifact, reducedMotion, mobile }: Pick
   const previousFocus = useRef(focus)
 
   useEffect(() => {
-    const mark: CameraMark = selectedArtifact ? artifactView(selectedArtifact, size.width / size.height) : mobile ? mobileMarks[focus] ?? marks[focus] : marks[focus]
+    const selectedEntry = artifactById(selectedArtifact)
+    const mark: CameraMark = selectedEntry?.section === 'experience'
+      ? artifactView(selectedEntry.id, size.width / size.height)
+      : mobile ? mobileMarks[focus] ?? marks[focus] : marks[focus]
     const pos = mark.position
     const target = mark.target
     const up = mark.up ?? [0, 1, 0]
+    const aboutMobileFov = focus === 'about' && mobile
+      ? THREE.MathUtils.radToDeg(2 * Math.atan(2.55 / (5.9 * (size.width / size.height))))
+      : 0
     const values = {
       x: pos[0], y: pos[1], z: pos[2],
       tx: target[0], ty: target[1], tz: target[2],
       ux: up[0], uy: up[1], uz: up[2],
-      fov: Math.min(focus === 'projects' ? 120 : 105, Math.max(mark.fov ?? 46,
+      fov: Math.min(focus === 'projects' || (focus === 'about' && mobile) ? 120 : 105, Math.max(mark.fov ?? 46, aboutMobileFov,
         ['room', 'lounge'].includes(focus)
           ? THREE.MathUtils.radToDeg(2 * Math.atan(Math.tan(THREE.MathUtils.degToRad(focus === 'room' ? 37 : 34)) / (size.width / size.height))) : 0)),
     }
@@ -358,7 +364,8 @@ function LoftContent({ focus, selectedProject, selectedArtifact, onArtifact, red
     <WindowSunlight mobile={mobile} reducedMotion={reducedMotion} />
     <Model onReady={onReady} />
     <Staircase onEnter={() => onFocus('upstairs')} interactive={focus === 'room'} />
-    <PersonalArtifacts focus={focus} selectedArtifact={selectedArtifact} onArtifact={onArtifact} onFocus={onFocus} />
+    <CameraDirector focus={focus} selectedArtifact={selectedArtifact} reducedMotion={reducedMotion} mobile={mobile} />
+    <PersonalArtifacts focus={focus} selectedArtifact={selectedArtifact} mobile={mobile} reducedMotion={reducedMotion} onArtifact={onArtifact} onFocus={onFocus} />
     <ContactConsole active={focus === 'contact'} reducedMotion={reducedMotion} onFocus={onFocus} />
     <LivingSpaces focus={focus} onFocus={onFocus} reducedMotion={reducedMotion} mobile={mobile} />
     <HitBox position={computerPoint([-1.75, 1.55, -2.37])} size={[2, 1.4, 0.4]} onClick={() => onFocus('computer')} enabled={focus === 'room'} />
@@ -372,7 +379,6 @@ function LoftContent({ focus, selectedProject, selectedArtifact, onArtifact, red
       enabled={focus === 'projects' && selectedProject === null}
       mobile={mobile} reducedMotion={reducedMotion} onSelect={() => onProject(index)} onBack={onBackToBlueprints} />)}
     <ProjectFocus active={focus === 'projects' && selectedProject !== null} mobile={mobile} />
-    <CameraDirector focus={focus} selectedArtifact={selectedArtifact} reducedMotion={reducedMotion} mobile={mobile} />
   </LoftEnvironment>
 }
 

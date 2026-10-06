@@ -65,13 +65,40 @@
         { "src": "images/projects/tamuflight-1.jpg", "alt": "TAMUFlight mission control map showing flights and proposed reroutes." },
         { "src": "images/projects/tamuflight-2.jpg", "alt": "TAMUFlight weather radar overlaid on aircraft routes and disruption data." }
       ],
-      "summary": "A real-time flight disruption dashboard for airport operations: track aircraft, monitor live weather, and find alternate routes around storms.",
-      "highlights": [
-        "Visualizes live flights, precipitation radar, cloud cover, and storm events on a Mapbox map.",
-        "Uses Dijkstra's algorithm to find weather-aware routes and prioritize emergency flights.",
-        "Combines cache-first API access, GPU detection, and client-side route calculations for responsive analysis."
+      "summary": "TAMUFlight is an aviation operations dashboard that helps airport teams respond to weather-driven disruptions. It combines live aircraft positions, radar and storm overlays, and weather-aware route alternatives so operators can see affected flights, reroute around dangerous conditions, and prioritize emergencies.",
+      "sections": [
+        {
+          "heading": "Why it exists",
+          "body": "Severe winter weather around Dallas–Fort Worth can disrupt flights across a major hub network. TAMUFlight brings flight status, weather conditions, and rerouting into one operations view."
+        },
+        {
+          "heading": "Live operations view",
+          "body": "The Mapbox interface tracks roughly 20–50 aircraft in the DFW area with FlightAware data. It layers RainViewer precipitation radar, weather overlays, and custom storm-event GeoJSON on the same map."
+        },
+        {
+          "heading": "Weather-aware rerouting",
+          "body": "The system models airports and routes as a directed graph, increases the cost of storm-affected paths, and uses Dijkstra’s algorithm to find alternatives. It samples several points along each flight path and draws curved detours around detected storms.",
+          "points": [
+            "Emergency flights receive higher routing priority.",
+            "Gemini explains route decisions in plain language.",
+            "A demo control can inject simulated storms with adjustable severity."
+          ]
+        },
+        {
+          "heading": "My contribution",
+          "body": "I focused on the frontend geospatial layer and client-side route optimization. I built the Mapbox visualization, integrated weather sources and storm overlays, added multi-point collision checks and curved detours, and implemented the demo storm controls and weather-layer settings. Moving route calculations into the browser brought route updates under 50 ms."
+        },
+        {
+          "heading": "Engineering challenges",
+          "body": "FlightAware’s free tier allows about 100 calls per month, so the team used cache-first data access with manual refreshes. We also added hardware detection for NVIDIA GPUs and Apple Silicon, with CPU fallback, and adjusted weather-layer opacity so radar would not hide flight markers."
+        }
       ],
-      "tools": ["React", "Mapbox GL JS", "Python / FastAPI", "NetworkX / Dijkstra", "FlightAware", "RainViewer", "Gemini"],
+      "highlights": [
+        "Tracks 20–50 DFW-area aircraft alongside radar, cloud, and storm data.",
+        "Finds weather-aware alternatives with Dijkstra's algorithm and multi-point storm checks.",
+        "Prioritizes emergency flights and explains rerouting decisions with Gemini."
+      ],
+      "tools": ["React / Vite", "Mapbox GL JS", "Python / FastAPI", "SQLite", "NetworkX / Dijkstra", "FlightAware AeroAPI", "RainViewer", "OpenWeather", "Gemini"],
       "links": [
         { "label": "Devpost project", "url": "https://devpost.com/software/tamuflight" },
         { "label": "GitHub repository", "url": "https://github.com/SaptiSD/TamuHack26" }
@@ -88,11 +115,29 @@
         { "src": "images/projects/atlas-2.jpg", "alt": "Atlas shopping interface with item search." },
         { "src": "images/projects/atlas-3.jpg", "alt": "Atlas page explaining grocery search and wishlist features." }
       ],
-      "summary": "A location-aware grocery search that compares nearby prices, stock, and availability so shoppers can find a better deal within 10 miles.",
+      "summary": "Atlas helps shoppers find a better grocery deal nearby. Search for a product and compare price and stock information from Walmart and Kroger stores within 10 miles, with results organized into one location-aware view.",
+      "sections": [
+        {
+          "heading": "The shopping problem",
+          "body": "Grocery prices and stock vary between stores, and checking each retailer one by one takes time. Atlas gives shoppers one place to compare nearby options before making a trip."
+        },
+        {
+          "heading": "Retailer comparison",
+          "body": "A product search and the shopper’s location go to a Node.js and Express backend. The backend queries Walmart and Kroger, then normalizes each retailer’s response into consistent product names, prices, and stock details for the Next.js interface."
+        },
+        {
+          "heading": "Nearby availability",
+          "body": "Atlas filters results to stores within a 10-mile radius, using the Haversine formula to calculate distance. A MongoDB cache stores results and past queries to speed up repeat searches and reduce redundant API calls."
+        },
+        {
+          "heading": "Integration challenges",
+          "body": "The retailer APIs use different authentication and data formats. The team implemented Walmart HMAC request signing and Kroger OAuth 2.0, then normalized inconsistent price and inventory fields while keeping API use within rate limits."
+        }
+      ],
       "highlights": [
-        "Connects Walmart and Kroger product data, handling HMAC signing and OAuth 2.0 authentication.",
-        "Normalizes different retailer responses and filters stores by distance with the Haversine formula.",
-        "Caches searches in MongoDB to reduce repeated API requests."
+        "Compares Walmart and Kroger prices and stock for stores within 10 miles.",
+        "Normalizes retailer data and shows nearby prices, stock, and distance.",
+        "Uses MongoDB caching to make repeat searches faster and limit duplicate API calls."
       ],
       "tools": ["Next.js / React", "Node.js / Express", "MongoDB", "Walmart API", "Kroger API"],
       "links": [
@@ -111,11 +156,29 @@
         { "src": "images/projects/simplylearn-2.jpg", "alt": "SimplyLearn form for generating a study plan." },
         { "src": "images/projects/simplylearn-3.jpg", "alt": "SimplyLearn study tasks organized in a Notion database." }
       ],
-      "summary": "An AI learning planner that turns a broad goal into clear steps, then organizes the goal and tasks in the learner's Notion workspace.",
+      "summary": "SimplyLearn turns a broad learning goal into a practical plan. It uses Gemini to create a clear objective and step-by-step task list, then places that plan in the learner’s Notion workspace so it is ready to use.",
+      "sections": [
+        {
+          "heading": "From intention to a plan",
+          "body": "People often know what they want to learn but are unsure where to begin. SimplyLearn takes a goal such as learning web development and turns it into a more specific objective with manageable next steps."
+        },
+        {
+          "heading": "AI-generated steps",
+          "body": "The app sends the learner’s input to Gemini, parses the response, and prepares a structured goal and to-do list. The result is designed to turn a broad aspiration into actions the learner can start completing."
+        },
+        {
+          "heading": "A plan in Notion",
+          "body": "Through the Notion API, SimplyLearn creates a dedicated page for the goal and a task database for its steps. The learner can continue organizing and tracking the plan in their own workspace."
+        },
+        {
+          "heading": "Implementation and recognition",
+          "body": "The team built the application with Python and Flask, connecting Gemini and Notion APIs with an HTML and Tailwind interface. They focused on parsing generated content for Notion, handling API errors and rate limits, and protecting API keys. SimplyLearn earned second place in the Beginner Hack category at Build4Good 2025."
+        }
+      ],
       "highlights": [
-        "Uses Gemini to turn a learning goal into a structured plan and actionable to-do list.",
-        "Creates a dedicated Notion page and task database through the Notion API.",
-        "Built with a Python and Flask workflow, including input validation and API error handling."
+        "Uses Gemini to turn learning goals into a clear objective and ordered tasks.",
+        "Creates a goal page and task database in the learner’s Notion workspace.",
+        "Placed second in the Beginner Hack category at Build4Good 2025."
       ],
       "tools": ["Python", "Flask", "Gemini API", "Notion API", "HTML / Tailwind"],
       "links": [

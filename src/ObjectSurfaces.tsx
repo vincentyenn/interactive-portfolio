@@ -66,6 +66,7 @@ export function MonitorSurface({ active, reducedMotion, onFocus }: {
   const links = useRef<LinkArea[]>([])
   const dirty = useRef(true)
   const focusedControl = useRef('')
+  const hasLineUpdate = useRef(false)
   useEffect(() => {
     age.current = 0
     lastDraw.current = -1
@@ -79,7 +80,11 @@ export function MonitorSurface({ active, reducedMotion, onFocus }: {
     if (active && ready && window.matchMedia('(pointer: fine)').matches) terminal.inputRef.current?.focus({ preventScroll: true })
     dirty.current = true
   }, [active, ready, terminal.inputRef])
-  useEffect(() => { scroll.current = Infinity; dirty.current = true }, [terminal.lines])
+  useEffect(() => {
+    if (hasLineUpdate.current) scroll.current = Infinity
+    hasLineUpdate.current = true
+    dirty.current = true
+  }, [terminal.lines])
   useEffect(() => { dirty.current = true }, [terminal.draft])
 
   useFrame((_, delta) => {
@@ -89,56 +94,84 @@ export function MonitorSurface({ active, reducedMotion, onFocus }: {
     lastDraw.current = tick
     dirty.current = false
     const { ctx, texture } = surface
-    ctx.fillStyle = '#070b0c'
+    ctx.fillStyle = '#080f17'
     ctx.fillRect(0, 0, 1200, 724)
     if (!active || (!reducedMotion && age.current < .65)) { texture.needsUpdate = true; return }
+    const haze = ctx.createRadialGradient(720, 120, 30, 720, 120, 850)
+    haze.addColorStop(0, 'rgba(67, 104, 126, .15)')
+    haze.addColorStop(1, 'rgba(67, 104, 126, 0)')
+    ctx.fillStyle = haze; ctx.fillRect(0, 0, 1200, 724)
+    ctx.strokeStyle = 'rgba(117, 158, 180, .045)'; ctx.lineWidth = 1
+    for (let scan = 4; scan < 724; scan += 7) { ctx.beginPath(); ctx.moveTo(0, scan); ctx.lineTo(1200, scan); ctx.stroke() }
+    ctx.font = '18px monospace'; ctx.fillStyle = '#829eaf'
+    ctx.fillText('SYS.VY / PORTFOLIO_INDEX', 34, 37)
+    ctx.fillStyle = '#b5d8e9'; ctx.fillText('[ ← ROOM ]', 1030, 37)
+    if (focusedControl.current.includes('ROOM')) { ctx.strokeStyle = '#a6cfdf'; ctx.strokeRect(1017, 12, 166, 37) }
+    ctx.strokeStyle = '#405c6e'; ctx.beginPath(); ctx.moveTo(30, 56); ctx.lineTo(1170, 56); ctx.stroke()
+    ctx.font = 'bold 91px "Courier New", monospace'
+    ctx.fillStyle = '#284657'; ctx.fillText('VINCENT YEN', 41, 151)
+    ctx.fillStyle = '#a4c8d9'; ctx.fillText('VINCENT YEN', 34, 144)
+    ctx.font = '18px monospace'; ctx.fillStyle = '#7e9bac'
+    ctx.fillText('CS / CYBERSECURITY', 910, 94)
+    ctx.fillText('BUILDING USEFUL SYSTEMS', 910, 124)
+    ctx.strokeStyle = '#405c6e'; ctx.beginPath(); ctx.moveTo(30, 166); ctx.lineTo(1170, 166); ctx.stroke()
+    const commands = ['about', 'experience', 'projects', 'contact']
+    const activeCommand = [...terminal.lines].reverse().find((line) => line.kind === 'command')?.text.toLowerCase().split(/\s+/)[0] ?? 'about'
     ctx.font = '20px monospace'
-    ctx.fillStyle = '#83a996'
-    ctx.fillText('VINCENT@LOFT  ~/portfolio', 32, 40)
-    ctx.fillStyle = '#e0b783'
-    ctx.fillText('[ ROOM ]', 1050, 40)
-    if (focusedControl.current.includes('ROOM')) { ctx.strokeStyle = '#e0b783'; ctx.strokeRect(1038, 15, 146, 36) }
-    ctx.strokeStyle = '#283a32'
-    ctx.beginPath(); ctx.moveTo(30, 58); ctx.lineTo(1170, 58); ctx.stroke()
+    commands.forEach((command, i) => {
+      const x = 34 + i * 286
+      const highlighted = activeCommand === command || focusedControl.current === command
+      ctx.fillStyle = highlighted ? '#d2e9f2' : '#8eabbc'
+      ctx.fillText(`/${command.toUpperCase()}`, x, 202)
+      ctx.strokeStyle = highlighted ? '#a5d3e7' : '#4c6a7b'
+      ctx.beginPath(); ctx.moveTo(x, 211); ctx.lineTo(x + ctx.measureText(`/${command.toUpperCase()}`).width, 211); ctx.stroke()
+    })
+    ctx.font = '17px monospace'; ctx.fillStyle = '#8eacbc'
+    ctx.fillText('VINCENT.YEN :: MACHINE-READABLE PORTFOLIO', 34, 251)
+    ctx.strokeStyle = '#4a6779'; ctx.beginPath(); ctx.moveTo(30, 267); ctx.lineTo(1170, 267); ctx.stroke()
     if (!ready) {
       const step = Math.max(0, Math.min(5, Math.floor((age.current - .65) * 2.4)))
-      const boot = ['> power on', '> waking display ... OK', '> mounting /portfolio ... OK', '> loading projects, experience, about', '> starting interactive shell', '> ready']
-      ctx.fillStyle = '#a7c6b2'
-      boot.slice(0, step + 1).forEach((line, i) => ctx.fillText(line, 42, 110 + i * 32))
-      ctx.font = '30px monospace'
-      const frames = ['[    /\\    ]', '[   /  \\   ]', '[  / LOFT\\  ]', '[  |    |  ]']
-      ctx.fillText(frames[Math.floor(age.current * 5) % frames.length], 465, 410)
-      ctx.font = '20px monospace'
+      const boot = ['> POWER ON', '> WAKE DISPLAY ........ OK', '> MOUNT /PORTFOLIO ..... OK', '> LOAD PROJECT INDEX ... OK', '> START INTERACTIVE SHELL', '> READY']
+      ctx.font = '21px monospace'; ctx.fillStyle = '#a5c3d2'
+      boot.slice(0, step + 1).forEach((line, i) => ctx.fillText(line, 42, 312 + i * 36))
+      ctx.font = '20px monospace'; ctx.fillStyle = '#7fa4b8'
       const progress = Math.min(20, Math.floor((age.current - .65) / 2.35 * 20))
-      ctx.fillText(`[${'='.repeat(Math.max(0, progress))}${' '.repeat(20 - Math.max(0, progress))}]`, 430, 460)
+      ctx.fillText(`[${'='.repeat(Math.max(0, progress))}${' '.repeat(20 - Math.max(0, progress))}]`, 42, 565)
       texture.needsUpdate = true
       return
     }
     // Measure first so old output can scroll without moving the command prompt.
-    ctx.font = '22px monospace'
+    ctx.font = '20px monospace'
     let total = 0
-    for (const line of terminal.lines) total += Math.max(1, Math.ceil(ctx.measureText(line.text).width / 1100)) * 31 + 9
-    maxScroll.current = Math.max(0, total - 480)
+    for (const line of terminal.lines) total += line.kind === 'heading' ? 42 : Math.max(1, Math.ceil(ctx.measureText(line.text).width / 1090)) * 28 + 8
+    maxScroll.current = Math.max(0, total - 282)
     scroll.current = Math.min(scroll.current, maxScroll.current)
     links.current = []
-    ctx.save(); ctx.beginPath(); ctx.rect(30, 78, 1140, 480); ctx.clip()
-    let y = 103 - scroll.current
+    ctx.save(); ctx.beginPath(); ctx.rect(30, 280, 1140, 282); ctx.clip()
+    let y = 303 - scroll.current
     for (const line of terminal.lines) {
-      ctx.fillStyle = line.kind === 'command' ? '#e4ba85' : line.kind === 'system' ? '#82a390' : '#d0dfd3'
+      if (line.kind === 'heading') {
+        ctx.fillStyle = '#83b8d0'; ctx.fillText(`— ${line.text}`, 36, y)
+        ctx.strokeStyle = '#46677a'; ctx.beginPath(); ctx.moveTo(270, y - 6); ctx.lineTo(1164, y - 6); ctx.stroke()
+        y += 42
+        continue
+      }
+      ctx.fillStyle = line.kind === 'command' ? '#d6edf5' : line.kind === 'system' ? '#7896a8' : line.kind === 'entry' ? '#adc8d5' : line.kind === 'link' ? '#9ed2e9' : '#c8d8e1'
       const startY = y
-      y = wrap(ctx, `${line.kind === 'command' ? '$ ' : ''}${line.text}${line.href ? ' ↗' : ''}`, 36, y, 1100, 31) + 9
+      y = wrap(ctx, `${line.kind === 'command' ? '> ' : ''}${line.text}${line.href ? ' ↗' : ''}`, 36, y, 1090, 28) + 8
       if (line.href) links.current.push({ top: startY - 25, bottom: y - 9, href: line.href })
     }
     ctx.restore()
-    ctx.strokeStyle = '#536e5a'; ctx.strokeRect(30, 588, 1140, 65)
-    ctx.fillStyle = '#e4ba85'; ctx.fillText('$', 47, 630)
-    ctx.fillStyle = '#dce9dc'
-    ctx.fillText(terminal.draft.slice(-76) || 'type help to explore', 82, 630)
-    if (!reducedMotion && tick % 2 === 0) ctx.fillRect(82 + ctx.measureText(terminal.draft.slice(-76)).width, 611, 11, 22)
-    ctx.fillStyle = '#89a493'; ctx.font = '19px monospace'
-    ;['about', 'experience', 'projects', 'contact'].forEach((command, i) => {
-      ctx.fillText(`[ ${command} ]`, 34 + i * 300, 693)
-      if (focusedControl.current === command) { ctx.strokeStyle = '#e0b783'; ctx.strokeRect(28 + i * 300, 668, 242, 35) }
+    ctx.fillStyle = '#0d1b27'; ctx.fillRect(30, 584, 1140, 63)
+    ctx.strokeStyle = '#66899d'; ctx.strokeRect(30, 584, 1140, 63)
+    ctx.fillStyle = '#86bdd6'; ctx.fillText('vincent@loft:~$', 47, 624)
+    ctx.fillStyle = '#d7e7ed'
+    const inputText = terminal.draft.slice(-66)
+    ctx.fillText(inputText || 'type help to explore', 252, 624)
+    if (!reducedMotion && tick % 2 === 0) ctx.fillRect(252 + ctx.measureText(inputText).width, 605, 10, 24)
+    ctx.fillStyle = '#8cabbc'; ctx.font = '18px monospace'
+    ;['[ HELP ]', '[ CLEAR ]', '[ WHOAMI ]', '[ ROOM ]'].forEach((label, i) => {
+      ctx.fillText(label, 34 + i * 286, 690)
     })
     texture.needsUpdate = true
   })
@@ -148,10 +181,11 @@ export function MonitorSurface({ active, reducedMotion, onFocus }: {
     if (!active) { onFocus('computer'); return }
     if (!event.uv) return
     const x = event.uv.x * 1200, y = (1 - event.uv.y) * 724
-    if (y < 60 && x > 1015) { onFocus('room'); return }
+    if (y < 56 && x > 1015) { onFocus('room'); return }
     if (!ready) return
-    if (y > 667) { terminal.executeCommand(['about', 'experience', 'projects', 'contact'][Math.min(3, Math.floor(x / 300))]); return }
-    const link = y > 78 && y < 558 ? links.current.find((area) => y >= area.top && y <= area.bottom) : undefined
+    if (y > 178 && y < 218) { terminal.executeCommand(['about', 'experience', 'projects', 'contact'][Math.min(3, Math.floor(x / 300))]); return }
+    if (y > 667) { terminal.executeCommand(['help', 'clear', 'whoami', 'room'][Math.min(3, Math.floor(x / 300))]); return }
+    const link = y > 280 && y < 562 ? links.current.find((area) => y >= area.top && y <= area.bottom) : undefined
     if (link) { window.open(link.href, '_blank', 'noopener,noreferrer'); return }
     terminal.inputRef.current?.focus({ preventScroll: true })
   }
@@ -386,13 +420,20 @@ export function ProjectSheet({ index, selected, enabled, mobile, reducedMotion, 
     ctx.fillStyle = '#9fbfc0'; ctx.font = '20px monospace'; ctx.fillText('TECHNOLOGIES', 50, y)
     ctx.fillStyle = '#e0e9dd'; ctx.font = '28px sans-serif'; y = wrap(ctx, project.tools.join(' / '), 50, y + 44, 1040, 40)
     y += 18
-    ctx.fillStyle = '#e7b880'; ctx.font = '19px monospace'; ctx.fillText('FIELD NOTES', 50, y)
+    ctx.fillStyle = '#e7b880'; ctx.font = '19px monospace'; ctx.fillText('PROJECT DETAILS', 50, y)
     y += 46
-    ctx.font = '25px sans-serif'; ctx.fillStyle = '#e0e9dd'
-    project.highlights.forEach((highlight, noteIndex) => {
-      ctx.fillStyle = '#9fbfc0'; ctx.font = '19px monospace'; ctx.fillText(`${String(noteIndex + 1).padStart(2, '0')} /`, 50, y)
+    project.sections.forEach((section) => {
+      ctx.fillStyle = '#9fbfc0'; ctx.font = '19px monospace'
+      ctx.fillText(section.heading.toUpperCase(), 50, y)
+      y += 38
       ctx.fillStyle = '#e0e9dd'; ctx.font = '25px sans-serif'
-      y = wrap(ctx, highlight, 110, y, 1040, 36) + 5
+      y = wrap(ctx, section.body, 50, y, 1040, 36) + 12
+      section.points?.forEach((point, pointIndex) => {
+        ctx.fillStyle = '#9fbfc0'; ctx.font = '19px monospace'
+        ctx.fillText(`${String(pointIndex + 1).padStart(2, '0')} /`, 50, y)
+        ctx.fillStyle = '#e0e9dd'; ctx.font = '24px sans-serif'
+        y = wrap(ctx, point, 110, y, 1040, 35) + 8
+      })
     })
     const additionalImages = images.slice(1)
     if (additionalImages.length) {
