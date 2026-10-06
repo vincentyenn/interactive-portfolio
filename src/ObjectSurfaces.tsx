@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Html } from '@react-three/drei'
+import { Html, useTexture } from '@react-three/drei'
 import { useFrame, useThree, type ThreeEvent } from '@react-three/fiber'
 import * as THREE from 'three'
 import gsap from 'gsap'
@@ -36,6 +36,18 @@ export function wrap(ctx: CanvasRenderingContext2D, text: string, x: number, y: 
   if (line) ctx.fillText(line, x, y)
   return y + lineHeight
 }
+
+function drawContainedImage(ctx: CanvasRenderingContext2D, image: HTMLImageElement, x: number, y: number, width: number, height: number, background = '#101718') {
+  ctx.fillStyle = background
+  ctx.fillRect(x, y, width, height)
+  if (!image.complete || !image.naturalWidth || !image.naturalHeight) return
+  const scale = Math.min(width / image.naturalWidth, height / image.naturalHeight)
+  const drawWidth = image.naturalWidth * scale
+  const drawHeight = image.naturalHeight * scale
+  ctx.drawImage(image, x + (width - drawWidth) / 2, y + (height - drawHeight) / 2, drawWidth, drawHeight)
+}
+
+const assetUrl = (path: string) => `${import.meta.env.BASE_URL}${path}`
 
 const cursor = (value: string) => { document.body.style.cursor = value }
 type LinkArea = { top: number, bottom: number, href: string }
@@ -162,6 +174,149 @@ export function MonitorSurface({ active, reducedMotion, onFocus }: {
   </group>
 }
 
+export function AboutSurface({ selected, focused, width, height, onOpen, onBack }: {
+  selected: boolean, focused: boolean, width: number, height: number,
+  onOpen: () => void, onBack: () => void
+}) {
+  const pixelsHigh = Math.round(1200 * height / width)
+  const surface = useSurface(1200, pixelsHigh)
+  const photos = portfolio.aboutPhotos
+  const photoTextures = useTexture(photos.map((photo) => assetUrl(photo.src)))
+  const images = useMemo(() => photoTextures.map((image) => image.image as HTMLImageElement), [photoTextures])
+  const [scroll, setScroll] = useState(0)
+  const maxScroll = useRef(0)
+  const touch = useRef<number | null>(null)
+  const dragged = useRef(false)
+  const scrollBy = (delta: number) => setScroll((value) => THREE.MathUtils.clamp(value + delta, 0, maxScroll.current))
+
+  useEffect(() => {
+    photoTextures.forEach((texture) => { texture.colorSpace = THREE.SRGBColorSpace; texture.needsUpdate = true })
+  }, [photoTextures])
+
+  useEffect(() => {
+    const { ctx, texture } = surface
+    ctx.fillStyle = '#e9e6db'; ctx.fillRect(0, 0, 1200, pixelsHigh)
+    ctx.strokeStyle = focused ? '#c3864e' : '#8f9187'; ctx.lineWidth = focused ? 8 : 2
+    ctx.strokeRect(22, 22, 1156, pixelsHigh - 44)
+
+    if (!selected) {
+      ctx.fillStyle = '#425d50'; ctx.font = '22px monospace'; ctx.fillText('VINCENT YEN  /  PERSONAL', 66, 92)
+      ctx.fillStyle = '#26352f'; ctx.font = 'bold 86px sans-serif'; ctx.fillText('About me.', 66, 205)
+      ctx.fillStyle = '#42514a'; ctx.font = '32px sans-serif'
+      wrap(ctx, 'Computer science, cybersecurity, football, film, and the people around me.', 68, 265, 1040, 43)
+      const y = 414, gap = 22
+      const widths = [490, 238, 238]
+      let x = 90
+      images.forEach((image, index) => {
+        drawContainedImage(ctx, image, x, y, widths[index], 312)
+        ctx.strokeStyle = '#b3b0a4'; ctx.lineWidth = 2; ctx.strokeRect(x, y, widths[index], 312)
+        x += widths[index] + gap
+      })
+      ctx.fillStyle = '#526459'; ctx.font = '20px monospace'; ctx.fillText('[ OPEN ABOUT ME ]', 68, pixelsHigh - 72)
+      texture.needsUpdate = true
+      return
+    }
+
+    ctx.fillStyle = '#33483d'; ctx.fillRect(24, 24, 1152, 84)
+    ctx.fillStyle = '#e7e5d8'; ctx.font = '20px monospace'; ctx.fillText('VINCENT YEN  /  ABOUT', 54, 76)
+    ctx.textAlign = 'right'; ctx.fillStyle = '#efc391'; ctx.fillText('[ BACK TO SHELF ]', 1142, 76); ctx.textAlign = 'left'
+
+    const contentTop = 126
+    const contentBottom = pixelsHigh - 104
+    ctx.save(); ctx.beginPath(); ctx.rect(48, contentTop, 1104, contentBottom - contentTop); ctx.clip(); ctx.translate(0, -scroll)
+    let y = 207
+    ctx.fillStyle = '#26352f'; ctx.font = 'bold 82px sans-serif'; ctx.fillText('About me.', 68, y)
+    ctx.fillStyle = '#49554d'; ctx.font = '34px sans-serif'
+    y = wrap(ctx, portfolio.about, 70, y + 68, 1040, 47) + 18
+    ctx.strokeStyle = '#b4b4a9'; ctx.beginPath(); ctx.moveTo(68, y); ctx.lineTo(1132, y); ctx.stroke()
+
+    y += 48
+    ctx.fillStyle = '#425d50'; ctx.font = '20px monospace'; ctx.fillText('A FEW FRAMES FROM MY LIFE', 70, y)
+    y += 26
+    const photoY = y
+    const photoHeight = 330
+    const photoWidths = [490, 238, 238]
+    const photoGap = 22
+    let photoX = 70
+    images.forEach((image, index) => {
+      drawContainedImage(ctx, image, photoX, photoY, photoWidths[index], photoHeight)
+      ctx.strokeStyle = '#b4b4a9'; ctx.lineWidth = 2; ctx.strokeRect(photoX, photoY, photoWidths[index], photoHeight)
+      ctx.fillStyle = '#405348'; ctx.font = '17px monospace'; ctx.fillText(photos[index].caption.toUpperCase(), photoX, photoY + photoHeight + 28)
+      photoX += photoWidths[index] + photoGap
+    })
+    y = photoY + photoHeight + 78
+
+    ctx.strokeStyle = '#b4b4a9'; ctx.beginPath(); ctx.moveTo(68, y); ctx.lineTo(1132, y); ctx.stroke()
+    y += 54
+    ctx.fillStyle = '#26352f'; ctx.font = 'bold 43px sans-serif'; ctx.fillText('Away from the screen.', 70, y)
+    ctx.fillStyle = '#49554d'; ctx.font = '31px sans-serif'
+    y = wrap(ctx, portfolio.outsideOfCode, 70, y + 54, 1040, 43) + 14
+
+    ctx.strokeStyle = '#b4b4a9'; ctx.beginPath(); ctx.moveTo(68, y); ctx.lineTo(1132, y); ctx.stroke()
+    y += 52
+    ctx.fillStyle = '#425d50'; ctx.font = '20px monospace'; ctx.fillText('EDUCATION', 70, y)
+    ctx.fillStyle = '#26352f'; ctx.font = '32px sans-serif'
+    y = wrap(ctx, portfolio.education, 70, y + 50, 1040, 42) + 20
+
+    ctx.strokeStyle = '#b4b4a9'; ctx.beginPath(); ctx.moveTo(68, y); ctx.lineTo(1132, y); ctx.stroke()
+    y += 52
+    ctx.fillStyle = '#425d50'; ctx.font = '20px monospace'; ctx.fillText('TOOLS I WORK WITH', 70, y)
+    ctx.fillStyle = '#26352f'; ctx.font = '28px sans-serif'
+    y = wrap(ctx, portfolio.skills.join('  /  '), 70, y + 50, 1040, 40)
+    y += 24
+    ctx.fillStyle = '#59645b'; ctx.font = '18px monospace'; ctx.fillText('VINCENT YEN  /  TEXAS A&M UNIVERSITY', 70, y)
+    maxScroll.current = Math.max(0, y + 44 - contentBottom)
+    ctx.restore()
+
+    ctx.fillStyle = '#e9e6db'; ctx.fillRect(24, pixelsHigh - 84, 1152, 60)
+    ctx.strokeStyle = '#b4b4a9'; ctx.beginPath(); ctx.moveTo(48, pixelsHigh - 84); ctx.lineTo(1152, pixelsHigh - 84); ctx.stroke()
+    ctx.fillStyle = '#59645b'; ctx.font = '17px monospace'
+    ctx.fillText(maxScroll.current > 0 ? 'SCROLL OR DRAG TO KEEP READING' : 'PERSONAL PAGE  /  VINCENT YEN', 58, pixelsHigh - 46)
+    if (maxScroll.current > 0) {
+      ctx.fillStyle = '#aab0a5'; ctx.fillRect(1124, contentTop + scroll / maxScroll.current * (contentBottom - contentTop - 68), 5, 68)
+    }
+    texture.needsUpdate = true
+  }, [surface, photos, images, pixelsHigh, selected, focused, scroll])
+
+  return <>
+    <mesh position={[0, 0, .055]} onClick={(event) => {
+      event.stopPropagation()
+      if (dragged.current) { dragged.current = false; return }
+      if (!selected) { onOpen(); return }
+      if (!event.uv) return
+      const x = event.uv.x * 1200, y = (1 - event.uv.y) * pixelsHigh
+      if (y < 110 && x > 900) onBack()
+    }} onPointerOver={() => { cursor('pointer') }} onPointerOut={() => cursor('')}
+    onWheel={(event) => { if (selected) { event.stopPropagation(); scrollBy(event.deltaY) } }}
+    onPointerDown={(event) => { touch.current = event.clientY; dragged.current = false }}
+    onPointerMove={(event) => { if (selected && event.buttons && touch.current !== null) {
+      const delta = touch.current - event.clientY
+      if (Math.abs(delta) > 2) dragged.current = true
+      scrollBy(delta * 2); touch.current = event.clientY
+    } }} onPointerUp={() => { touch.current = null }}>
+      <planeGeometry args={[width, height]} />
+      <meshStandardMaterial map={surface.texture} roughness={.9} emissiveMap={surface.texture}
+        emissive="#ffffff" emissiveIntensity={selected ? .18 : .08} />
+    </mesh>
+    <Html><div className="visually-hidden" onKeyDownCapture={(event) => {
+      if (!selected) return
+      if (event.key === 'ArrowDown' || event.key === 'PageDown') { event.preventDefault(); scrollBy(event.key === 'PageDown' ? 360 : 64) }
+      if (event.key === 'ArrowUp' || event.key === 'PageUp') { event.preventDefault(); scrollBy(event.key === 'PageUp' ? -360 : -64) }
+    }}>
+      <button autoFocus={selected} onClick={selected ? onBack : onOpen}>{selected ? 'Back to the shelf' : 'Open About Me'}</button>
+      {selected && <section aria-label="About Vincent">
+        <h2>About me</h2><p>{portfolio.about}</p>
+        <div role="group" aria-label="Personal photos">{photos.map((photo) => <img key={photo.src} src={assetUrl(photo.src)} alt={photo.alt} />)}</div>
+        <h3>Away from the screen</h3><p>{portfolio.outsideOfCode}</p>
+        <h3>Education</h3><p>{portfolio.education}</p>
+        <h3>Tools I work with</h3><ul>{portfolio.skills.map((skill) => <li key={skill}>{skill}</li>)}</ul>
+        <button onClick={() => scrollBy(360)}>Continue reading</button>
+        <button onClick={() => scrollBy(-360)}>Read previous section</button>
+      </section>}
+    </div></Html>
+  </>
+}
+
 const sheetPositions: Point[] = [benchPoint([.86, 1.01, .72]), benchPoint([2.48, 1.01, .93]), benchPoint([3.78, 1.01, 1.41])]
 const sheetAngles = [-.08, .09, -.065]
 
@@ -173,13 +328,18 @@ export function ProjectSheet({ index, selected, enabled, mobile, reducedMotion, 
   const group = useRef<THREE.Group>(null)
   const { size } = useThree()
   const project = portfolio.projects[index]
+  const imageTextures = useTexture(project.images.map((image) => assetUrl(image.src)))
+  const images = useMemo(() => imageTextures.map((image) => image.image as HTMLImageElement), [imageTextures])
   const [scroll, setScroll] = useState(0)
   const [keyboardFocus, setKeyboardFocus] = useState(false)
-  const linkY = useRef(0)
+  const linkAreas = useRef<LinkArea[]>([])
   const maxScroll = useRef(0)
   const touch = useRef<number | null>(null)
   const dragged = useRef(false)
   const start = sheetPositions[index]
+  useEffect(() => {
+    imageTextures.forEach((texture) => { texture.colorSpace = THREE.SRGBColorSpace; texture.needsUpdate = true })
+  }, [imageTextures])
   useEffect(() => {
     const node = group.current
     if (!node) return
@@ -211,22 +371,59 @@ export function ProjectSheet({ index, selected, enabled, mobile, reducedMotion, 
     ctx.save(); ctx.beginPath(); ctx.rect(40, 92, 1120, 673); ctx.clip(); ctx.translate(0, -scroll)
     ctx.fillStyle = '#e4ecdf'; ctx.font = 'bold 51px sans-serif'; ctx.fillText(project.title, 48, 154)
     ctx.fillStyle = '#a1c4c4'; ctx.font = '20px monospace'; ctx.fillText(`${project.category.toUpperCase()}  /  ${project.year}  /  ${project.status.toUpperCase()}`, 50, 199)
-    // A printed interface drawing shares the paper with its actual project data.
-    ctx.strokeStyle = '#91b8b9'; ctx.lineWidth = 2; ctx.strokeRect(52, 232, 670, 240)
-    ctx.strokeRect(70, 256, 130, 194); ctx.strokeRect(220, 256, 480, 44)
-    for (let i = 0; i < 3; i++) { ctx.strokeRect(220 + i * 165, 318, 148, 130); ctx.beginPath(); ctx.moveTo(238 + i * 165, 343); ctx.lineTo(345 + i * 165, 343); ctx.stroke() }
-    ctx.fillStyle = '#e7b880'; ctx.font = '19px monospace'; ctx.fillText('BUILD NOTES', 768, 256)
+    ctx.save(); ctx.beginPath(); ctx.rect(52, 232, 600, 338); ctx.clip()
+    drawContainedImage(ctx, images[0], 52, 232, 600, 338)
+    ctx.restore()
+    ctx.strokeStyle = '#91b8b9'; ctx.lineWidth = 2; ctx.strokeRect(52, 232, 600, 338)
+    ctx.fillStyle = '#e7b880'; ctx.font = '19px monospace'; ctx.fillText('BUILD NOTES', 700, 256)
     ctx.fillStyle = '#bfd4cd'; ctx.font = '22px monospace'
-    project.tools.forEach((tool, i) => ctx.fillText(`${String(i + 1).padStart(2, '0')} / ${tool}`, 768, 303 + i * 36))
-    ctx.fillStyle = '#e7b880'; ctx.font = '19px monospace'; ctx.fillText('PROJECT OVERVIEW', 50, 522)
+    project.tools.forEach((tool, i) => ctx.fillText(`${String(i + 1).padStart(2, '0')} / ${tool}`, 700, 303 + i * 36))
+    ctx.fillStyle = '#e7b880'; ctx.font = '19px monospace'; ctx.fillText('PROJECT OVERVIEW', 50, 620)
     ctx.fillStyle = '#e0e9dd'; ctx.font = '29px sans-serif'
-    let y = wrap(ctx, project.summary, 50, 570, 1040, 43)
+    let y = wrap(ctx, project.summary, 50, 668, 1040, 43)
     y += 37; ctx.strokeStyle = '#60868e'; ctx.beginPath(); ctx.moveTo(50, y); ctx.lineTo(1150, y); ctx.stroke()
-    ctx.fillStyle = '#9fbfc0'; ctx.font = '20px monospace'; ctx.fillText('TECHNOLOGIES', 50, y + 46)
-    ctx.fillStyle = '#e0e9dd'; ctx.font = '28px sans-serif'; y = wrap(ctx, project.tools.join(' / '), 50, y + 90, 1040, 40)
-    linkY.current = y + 26
-    if ('repository' in project && project.repository) { ctx.fillStyle = '#edc08d'; ctx.font = '24px monospace'; ctx.fillText('VIEW REPOSITORY  ↗', 50, y + 50); y += 90 }
-    y += 70
+    y += 46
+    ctx.fillStyle = '#9fbfc0'; ctx.font = '20px monospace'; ctx.fillText('TECHNOLOGIES', 50, y)
+    ctx.fillStyle = '#e0e9dd'; ctx.font = '28px sans-serif'; y = wrap(ctx, project.tools.join(' / '), 50, y + 44, 1040, 40)
+    y += 18
+    ctx.fillStyle = '#e7b880'; ctx.font = '19px monospace'; ctx.fillText('FIELD NOTES', 50, y)
+    y += 46
+    ctx.font = '25px sans-serif'; ctx.fillStyle = '#e0e9dd'
+    project.highlights.forEach((highlight, noteIndex) => {
+      ctx.fillStyle = '#9fbfc0'; ctx.font = '19px monospace'; ctx.fillText(`${String(noteIndex + 1).padStart(2, '0')} /`, 50, y)
+      ctx.fillStyle = '#e0e9dd'; ctx.font = '25px sans-serif'
+      y = wrap(ctx, highlight, 110, y, 1040, 36) + 5
+    })
+    const additionalImages = images.slice(1)
+    if (additionalImages.length) {
+      y += 24
+      ctx.fillStyle = '#e7b880'; ctx.font = '19px monospace'; ctx.fillText('MORE PROJECT VIEWS', 50, y)
+      y += 24
+      const gap = 24
+      const tileWidth = additionalImages.length === 1 ? 520 : (1100 - gap) / 2
+      const tileHeight = 285
+      const startX = additionalImages.length === 1 ? 50 : 50
+      additionalImages.forEach((image, imageIndex) => {
+        const x = startX + imageIndex * (tileWidth + gap)
+        drawContainedImage(ctx, image, x, y, tileWidth, tileHeight)
+        ctx.strokeStyle = '#60868e'; ctx.lineWidth = 2; ctx.strokeRect(x, y, tileWidth, tileHeight)
+        ctx.fillStyle = '#9fbfc0'; ctx.font = '16px monospace'; ctx.fillText(`SCREEN 0${imageIndex + 2}`, x, y + tileHeight + 22)
+      })
+      y += tileHeight + 45
+    }
+    y += 14
+    ctx.strokeStyle = '#60868e'; ctx.beginPath(); ctx.moveTo(50, y); ctx.lineTo(1150, y); ctx.stroke()
+    y += 42
+    ctx.fillStyle = '#e7b880'; ctx.font = '19px monospace'; ctx.fillText('PROJECT LINKS', 50, y)
+    y += 40
+    linkAreas.current = []
+    ctx.font = '22px monospace'
+    project.links.forEach((link) => {
+      ctx.fillStyle = '#edc08d'; ctx.fillText(`${link.label.toUpperCase()}  ↗`, 50, y)
+      linkAreas.current.push({ top: y - 27, bottom: y + 8, href: link.url })
+      y += 48
+    })
+    y += 24
     ctx.fillStyle = '#91b4b6'; ctx.font = '18px monospace'; ctx.fillText(`END OF SHEET 0${index + 1} / ${project.title.toUpperCase()}`, 50, y)
     maxScroll.current = Math.max(0, y + 25 - 765)
     ctx.restore()
@@ -234,7 +431,7 @@ export function ProjectSheet({ index, selected, enabled, mobile, reducedMotion, 
     ctx.fillStyle = '#9fbdbb'; ctx.font = '17px monospace'; ctx.fillText(selected ? 'SCROLL PAPER  /  DRAG TO READ  /  ESC TO RETURN' : 'SELECT THIS DRAWING TO EXPLORE', 50, 797)
     if (selected && maxScroll.current > 0) { ctx.fillStyle = '#c4cdb7'; ctx.fillRect(1150, 110 + scroll / maxScroll.current * 525, 4, 90) }
     texture.needsUpdate = true
-  }, [project, index, selected, scroll, surface, keyboardFocus])
+  }, [project, index, selected, scroll, surface, keyboardFocus, images])
 
   const changeScroll = (delta: number) => setScroll((value) => THREE.MathUtils.clamp(value + delta, 0, maxScroll.current))
   const click = (event: ThreeEvent<MouseEvent>) => {
@@ -244,7 +441,10 @@ export function ProjectSheet({ index, selected, enabled, mobile, reducedMotion, 
     if (!event.uv) return
     const x = event.uv.x * 1200, y = (1 - event.uv.y) * 840
     if (y < 88 && x > 915) { onBack(); return }
-    if (y > 92 && y < 765 && y + scroll >= linkY.current && y + scroll <= linkY.current + 55 && 'repository' in project && project.repository) window.open(project.repository, '_blank', 'noopener,noreferrer')
+    if (y > 92 && y < 765) {
+      const link = linkAreas.current.find((area) => y + scroll >= area.top && y + scroll <= area.bottom)
+      if (link) window.open(link.href, '_blank', 'noopener,noreferrer')
+    }
   }
   return <group ref={group} position={start} scale={benchScale} rotation={[0, sheetAngles[index], 0]}>
     <mesh castShadow receiveShadow><boxGeometry args={[1.53, .009, 1.09]} /><meshStandardMaterial color="#ccc8b6" roughness={.94} /></mesh>

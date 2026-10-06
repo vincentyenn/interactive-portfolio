@@ -13,7 +13,7 @@ import {
   ABOUT_SHELF_TARGET,
   applyChairShelfFixes,
 } from './ChairShelfFixes'
-import { applyDoorPosterFixes, contactDoorView } from './DoorPosterFixes'
+import { applyDoorPosterFixes, contactConsoleView } from './DoorPosterFixes'
 import { applyLoftShellFixes } from './LoftShellFixes'
 import LoftEnvironment from './LoftEnvironment'
 import LoftCity from './LoftCity'
@@ -23,6 +23,7 @@ import LivingSpaces from './LivingSpaces'
 import WindowSunlight from './WindowSunlight'
 import ProjectFocus from './ProjectFocus'
 import PersonalArtifacts from './PersonalArtifacts'
+import ContactConsole from './ContactConsole'
 import { batchStaticMeshes } from './batchStaticMeshes'
 import { RenderBudget, RenderStats } from './RenderBudget'
 import { artifactView } from './roomArtifacts'
@@ -73,19 +74,19 @@ const marks: Record<Focus, CameraMark> = {
   projects: { position: [workbenchCenter[0], projectView.cameraHeight, workbenchCenter[2]], target: workbenchCenter, up: [0, 0, -1], fov: projectView.fov },
   experience: { position: experiencePoint([3.03, 2.75, .3]), target: experiencePoint([3.03, 2.7, -4.43]), fov: 50 },
   about: { position: ABOUT_SHELF_CAMERA, target: ABOUT_SHELF_TARGET, fov: 48 },
-  contact: { position: contactDoorView.desktop.position, target: contactDoorView.desktop.target, fov: contactDoorView.desktop.fov },
+  contact: { position: contactConsoleView.desktop.position, target: contactConsoleView.desktop.target, fov: contactConsoleView.desktop.fov },
 }
 
 const mobileMarks: Partial<Record<Focus, CameraMark>> = {
   room: { position: [0.3, 4.5, 13.1], target: point(layout.roomTarget), fov: 67 },
   upstairs: { position: [0.05, 5.1, -2.5], target: point(layout.upstairsTarget), fov: 78 },
   nook: { position: [-5.2, 2.15, 3.0], target: [-6.2, .95, -.95], fov: 86 },
-  lounge: { position: [-0.1, 3.2, 4.1], target: point(layout.loungeTarget), fov: 78 },
+  lounge: { position: [0.1, 3.1, 5.05], target: [0, 1.24, 11.4], fov: 78 },
   projects: { position: [workbenchCenter[0], projectView.cameraHeight, workbenchCenter[2]], target: workbenchCenter, up: [0, 0, -1], fov: projectView.mobileFov },
   computer: { position: computerPoint([-1.71, 1.78, 0.55]), target: computerPoint([-1.71, 1.63, -2.37]), fov: 72 },
   experience: { position: experiencePoint([3.03, 2.75, 1.1]), target: experiencePoint([3.03, 2.7, -4.43]), fov: 86 },
   about: { position: ABOUT_SHELF_MOBILE_CAMERA, target: ABOUT_SHELF_MOBILE_TARGET, fov: 65 },
-  contact: { position: contactDoorView.mobile.position, target: contactDoorView.mobile.target, fov: contactDoorView.mobile.fov },
+  contact: { position: contactConsoleView.mobile.position, target: contactConsoleView.mobile.target, fov: contactConsoleView.mobile.fov },
 }
 
 function CameraDirector({ focus, selectedArtifact, reducedMotion, mobile }: Pick<Props, 'focus' | 'selectedArtifact' | 'reducedMotion' | 'mobile'>) {
@@ -230,10 +231,11 @@ function Model({ onReady }: { onReady: () => void }) {
               material.roughness = 1
               material.normalScale.set(.22, .22)
             }
-            if (material.name === 'lounge woven linen') {
-              material.color.set('#8faaa6')
-              material.roughness = .95
+            if (material.name === 'lounge woven wool rug') {
+              material.roughness = 1
+              material.normalScale.set(.18, .18)
             }
+            if (material.name === 'lounge aged leather') material.roughness = .71
             if (/mid_century_lounge_chair/.test(material.name)) material.roughness = Math.max(material.roughness, .72)
             if (material.name === 'warm plaster') {
               material.normalScale.set(0.035, 0.035)
@@ -356,14 +358,15 @@ function LoftContent({ focus, selectedProject, selectedArtifact, onArtifact, red
     <WindowSunlight mobile={mobile} reducedMotion={reducedMotion} />
     <Model onReady={onReady} />
     <Staircase onEnter={() => onFocus('upstairs')} interactive={focus === 'room'} />
-    <PersonalArtifacts focus={focus} selectedArtifact={selectedArtifact} reducedMotion={reducedMotion} onArtifact={onArtifact} onFocus={onFocus} />
+    <PersonalArtifacts focus={focus} selectedArtifact={selectedArtifact} onArtifact={onArtifact} onFocus={onFocus} />
+    <ContactConsole active={focus === 'contact'} reducedMotion={reducedMotion} onFocus={onFocus} />
     <LivingSpaces focus={focus} onFocus={onFocus} reducedMotion={reducedMotion} mobile={mobile} />
     <HitBox position={computerPoint([-1.75, 1.55, -2.37])} size={[2, 1.4, 0.4]} onClick={() => onFocus('computer')} enabled={focus === 'room'} />
     <HitBox position={benchPoint([2.3, 1.02, 1.05])} size={[5.6 * benchScale, 0.3, 2.8 * benchScale]} onClick={() => onFocus('projects')} enabled={focus === 'room'} />
     <MonitorSurface active={focus === 'computer'} reducedMotion={reducedMotion} onFocus={onFocus} />
     <HitBox position={experiencePoint([2.74, 2.63, -4.12])} size={[3.25, 2.3, 0.35]} onClick={() => onFocus('experience')} enabled={focus === 'room'} />
     <HitBox position={ABOUT_SHELF_HITBOX_POSITION} size={ABOUT_SHELF_HITBOX_SIZE} onClick={() => onFocus('about')} enabled={focus === 'room'} />
-    <HitBox position={contactDoorView.hotspot.position} size={contactDoorView.hotspot.size} onClick={() => onFocus('contact')} enabled={focus === 'room'} />
+    <HitBox position={contactConsoleView.hotspot.position} size={contactConsoleView.hotspot.size} onClick={() => onFocus('contact')} enabled={focus === 'room'} />
     {[0, 1, 2].map((index) => <ProjectSheet key={index} index={index}
       selected={focus === 'projects' && selectedProject === index}
       enabled={focus === 'projects' && selectedProject === null}

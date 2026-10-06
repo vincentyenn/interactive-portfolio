@@ -1,6 +1,6 @@
 import React, { Suspense, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
-import { RoundedBox, useGLTF } from '@react-three/drei'
+import { useGLTF } from '@react-three/drei'
 import * as THREE from 'three'
 import { useLoftEnvironment } from './LoftEnvironment'
 import type { Weather } from './visitWeather'
@@ -66,104 +66,289 @@ function seeded(seed: number, index: number) {
   return value - Math.floor(value)
 }
 
-function WindowGrid({ width, depth, height, floors, seed }: { width: number, depth: number, height: number, floors: number, seed: number }) {
+function Skyline() {
   const environment = useLoftEnvironment()
+  const buildingsRef = useRef<THREE.InstancedMesh>(null)
   const litRef = useRef<THREE.InstancedMesh>(null)
   const darkRef = useRef<THREE.InstancedMesh>(null)
-  const columns = Math.max(2, Math.min(8, Math.floor(width / 0.42)))
-  const transforms = useMemo(() => {
+  const { buildings, lit, dark } = useMemo(() => {
+    const buildings: { matrix: THREE.Matrix4, color: THREE.Color }[] = []
     const lit: THREE.Matrix4[] = []
     const dark: THREE.Matrix4[] = []
     const dummy = new THREE.Object3D()
-    for (let row = 0; row < floors; row += 1) {
-      const y = -height / 2 + ((row + 0.72) / floors) * height
-      for (let column = 0; column < columns; column += 1) {
-        if (seeded(seed, row * 17 + column) < 0.16) continue
-        const x = -width / 2 + ((column + 1) / (columns + 1)) * width
-        dummy.position.set(x, y, depth / 2 + 0.028)
+    for (const tower of skyline) {
+      for (const section of sectionsFor(tower)) {
+        dummy.position.set(tower.x, -1.15 + section.bottom + section.height / 2, tower.z)
+        dummy.scale.set(section.width, section.height, section.depth)
         dummy.updateMatrix()
-        const destination = seeded(seed + 9, row * 23 + column) > 0.66 ? lit : dark
-        destination.push(dummy.matrix.clone())
+        buildings.push({ matrix: dummy.matrix.clone(), color: new THREE.Color(tower.tone) })
+        const width = section.width * .86
+        const height = section.height * .84
+        const columns = Math.max(2, Math.min(8, Math.floor(width / .42)))
+        const floors = Math.max(2, Math.floor(section.height / .72))
+        for (let row = 0; row < floors; row++) for (let column = 0; column < columns; column++) {
+          if (seeded(tower.seed + section.index * 13, row * 17 + column) < .16) continue
+          const x = tower.x - width / 2 + ((column + 1) / (columns + 1)) * width
+          const y = -1.15 + section.bottom + section.height / 2 - height / 2 + ((row + .72) / floors) * height
+          dummy.position.set(x, y, tower.z + section.depth / 2 + .028)
+          dummy.scale.set(Math.min(.24, width / (columns + 1) * .52), Math.min(.3, height / floors * .52), 1)
+          dummy.updateMatrix()
+          const destination = seeded(tower.seed + section.index * 13 + 9, row * 23 + column) > .66 ? lit : dark
+          destination.push(dummy.matrix.clone())
+        }
       }
     }
-    return { lit, dark }
-  }, [columns, depth, floors, height, seed, width])
-  const geometry = useMemo(() => new THREE.BoxGeometry(Math.min(0.24, width / (columns + 1) * 0.52), Math.min(0.3, height / Math.max(floors, 1) * 0.52), 0.045), [columns, floors, height, width])
-  const darkMaterial = useMemo(() => new THREE.MeshStandardMaterial({ color: '#17252b', emissive: '#253138', emissiveIntensity: 0.16, roughness: 0.32, metalness: 0.22 }), [])
-  const litMaterial = useMemo(() => new THREE.MeshStandardMaterial({ color: '#b78e5e', emissive: '#f2b36d', emissiveIntensity: 0.35, roughness: 0.28, metalness: 0.16 }), [])
+    return { buildings, lit, dark }
+  }, [])
+  const geometry = useMemo(() => new THREE.BoxGeometry(1, 1, 1), [])
+  const windowGeometry = useMemo(() => new THREE.PlaneGeometry(1, 1), [])
+  const buildingMaterial = useMemo(() => new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: .62, metalness: .36 }), [])
+  const litMaterial = useMemo(() => new THREE.MeshStandardMaterial({ color: '#b78e5e', emissive: '#f2b36d', emissiveIntensity: .35, roughness: .28, metalness: .16 }), [])
+  const darkMaterial = useMemo(() => new THREE.MeshStandardMaterial({ color: '#17252b', emissive: '#253138', emissiveIntensity: .16, roughness: .32, metalness: .22 }), [])
+  useLayoutEffect(() => {
+    buildings.forEach(({ matrix, color }, index) => {
+      buildingsRef.current?.setMatrixAt(index, matrix)
+      buildingsRef.current?.setColorAt(index, color)
+    })
+    lit.forEach((matrix, index) => litRef.current?.setMatrixAt(index, matrix))
+    dark.forEach((matrix, index) => darkRef.current?.setMatrixAt(index, matrix))
+    for (const mesh of [buildingsRef.current, litRef.current, darkRef.current]) {
+      if (!mesh) continue
+      mesh.instanceMatrix.needsUpdate = true
+      if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true
+      mesh.computeBoundingSphere()
+    }
+  }, [buildings, lit, dark])
+  useFrame(() => { litMaterial.emissiveIntensity = .06 + environment.windowGlow })
+  useEffect(() => () => {
+    geometry.dispose()
+    windowGeometry.dispose()
+    buildingMaterial.dispose()
+    litMaterial.dispose()
+    darkMaterial.dispose()
+  }, [geometry, windowGeometry, buildingMaterial, litMaterial, darkMaterial])
+  return <group>
+    <instancedMesh ref={buildingsRef} args={[geometry, buildingMaterial, buildings.length]} castShadow={false} receiveShadow={false} />
+    <instancedMesh ref={darkRef} args={[windowGeometry, darkMaterial, dark.length]} castShadow={false} receiveShadow={false} />
+    <instancedMesh ref={litRef} args={[windowGeometry, litMaterial, lit.length]} castShadow={false} receiveShadow={false} />
+    {skyline.filter((tower) => tower.antenna).map((tower) => <group key={tower.seed} position={[tower.x, -1.15 + tower.height, tower.z]}>
+      <mesh position={[0, .85, 0]}><cylinderGeometry args={[.024, .055, 1.7, 8]} /><meshStandardMaterial color="#66767a" metalness={.8} roughness={.3} /></mesh>
+      <mesh position={[0, 1.72, 0]}><sphereGeometry args={[.075, 8, 6]} /><meshStandardMaterial color="#f4b87d" emissive="#e59760" emissiveIntensity={.38} /></mesh>
+    </group>)}
+  </group>
+}
 
+function StreetLamp({ x, z }: { x: number, z: number }) {
+  return <group position={[x, -1.15, z]}>
+    <mesh position={[0, 1.55, 0]}>
+      <cylinderGeometry args={[.035, .055, 3.1, 8]} />
+      <meshStandardMaterial color="#34474b" metalness={.58} roughness={.48} />
+    </mesh>
+    <mesh position={[0, 3.04, 0]}>
+      <boxGeometry args={[.7, .07, .09]} />
+      <meshStandardMaterial color="#34474b" metalness={.58} roughness={.48} />
+    </mesh>
+    <mesh position={[.3, 2.99, 0]}>
+      <boxGeometry args={[.19, .035, .1]} />
+      <meshBasicMaterial color="#f4c58b" toneMapped={false} />
+    </mesh>
+  </group>
+}
+
+function RoadMarkings({ z, snow }: { z: number, snow: boolean }) {
+  const markings = useRef<THREE.InstancedMesh>(null)
+  useLayoutEffect(() => {
+    if (!markings.current) return
+    const dummy = new THREE.Object3D()
+    for (let index = 0; index < 15; index += 1) {
+      dummy.position.set(-42 + index * 6, -1.139, z)
+      dummy.scale.set(2.1, .006, .075)
+      dummy.updateMatrix()
+      markings.current.setMatrixAt(index, dummy.matrix)
+    }
+    for (let index = 0; index < 7; index += 1) {
+      dummy.position.set((index - 3) * .35, -1.138, z)
+      dummy.scale.set(.16, .006, 4.9)
+      dummy.updateMatrix()
+      markings.current.setMatrixAt(15 + index, dummy.matrix)
+    }
+    markings.current.instanceMatrix.needsUpdate = true
+    markings.current.computeBoundingSphere()
+  }, [z])
+  return <instancedMesh ref={markings} args={[undefined, undefined, 22]} castShadow={false} receiveShadow={false}>
+    <boxGeometry args={[1, 1, 1]} />
+    <meshBasicMaterial color={snow ? '#cbd1cb' : '#a8a89b'} />
+  </instancedMesh>
+}
+
+function CityGround() {
+  const { weather } = useLoftEnvironment()
+  const snow = weather === 'snow'
+  const wet = weather === 'rain' || weather === 'thunderstorm'
+  return <group name="city streets and ground">
+    <mesh position={[0, -1.17, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow={false}>
+      <planeGeometry args={[180, 180]} />
+      <meshStandardMaterial color={snow ? '#879397' : '#253238'} roughness={wet ? .48 : .96} metalness={wet ? .14 : .02} />
+    </mesh>
+    {[26, -12].map((z) => <group key={z}>
+      <mesh position={[0, -1.155, z]} rotation={[-Math.PI / 2, 0, 0]}>
+        <planeGeometry args={[90, 5.6]} />
+        <meshStandardMaterial color={snow ? '#48585c' : '#141f24'} roughness={wet ? .34 : .94} metalness={wet ? .2 : .03} />
+      </mesh>
+      {[-3.35, 3.35].map((side) => <mesh key={side} position={[0, -1.115, z + side]}>
+        <boxGeometry args={[90, .08, 1.05]} />
+        <meshStandardMaterial color={snow ? '#b2b8b6' : '#5a6868'} roughness={.98} />
+      </mesh>)}
+      <RoadMarkings z={z} snow={snow} />
+    </group>)}
+    <StreetLamp x={-11.8} z={29.4} />
+    <StreetLamp x={11.8} z={29.4} />
+  </group>
+}
+
+// A single row of shallow shopfronts gives the lounge a street-level horizon.
+// Repeated parts share geometry and materials; signs use one small canvas atlas.
+function CityShops() {
+  const environment = useLoftEnvironment()
+  const bodyRef = useRef<THREE.InstancedMesh>(null)
+  const glazingRef = useRef<THREE.InstancedMesh>(null)
+  const awningRef = useRef<THREE.InstancedMesh>(null)
+  const frameRef = useRef<THREE.InstancedMesh>(null)
+  const box = useMemo(() => new THREE.BoxGeometry(1, 1, 1), [])
+  const bodyMaterial = useMemo(() => new THREE.MeshStandardMaterial({ color: '#ffffff', emissive: '#171d1c', emissiveIntensity: .2, roughness: .92 }), [])
+  const glassMaterial = useMemo(() => new THREE.MeshStandardMaterial({
+    color: '#243b45', emissive: '#b87842', emissiveIntensity: .12,
+    roughness: .28, metalness: .28,
+  }), [])
+  const awningMaterial = useMemo(() => new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: .82 }), [])
+  const frameMaterial = useMemo(() => new THREE.MeshStandardMaterial({ color: '#1b2529', metalness: .48, roughness: .52 }), [])
+  const signTexture = useMemo(() => {
+    const canvas = document.createElement('canvas')
+    canvas.width = 1536; canvas.height = 128
+    const ctx = canvas.getContext('2d')
+    if (ctx) {
+      // The sign plane faces back toward the lounge, reversing its image.
+      ctx.translate(canvas.width, 0); ctx.scale(-1, 1)
+      ctx.fillStyle = '#1d282c'; ctx.fillRect(0, 0, canvas.width, canvas.height)
+      const names = ['BOWERY BOOKS', 'NIGHT OWL', 'FLOWER SHOP', 'CAMERA HOUSE', 'CORNER MARKET']
+      names.forEach((name, index) => {
+        const left = index * canvas.width / names.length
+        ctx.fillStyle = index % 2 ? '#35483e' : '#303e46'
+        ctx.fillRect(left + 4, 5, canvas.width / names.length - 8, 118)
+        ctx.fillStyle = '#d6c7a5'
+        ctx.font = 'bold 22px Arial'
+        ctx.textAlign = 'center'
+        ctx.fillText(name, left + canvas.width / names.length / 2, 75)
+      })
+    }
+    const texture = new THREE.CanvasTexture(canvas)
+    texture.colorSpace = THREE.SRGBColorSpace
+    texture.anisotropy = 4
+    texture.wrapS = THREE.RepeatWrapping
+    texture.repeat.x = -1
+    texture.offset.x = 1
+    return texture
+  }, [])
+  const shopWindowTexture = useMemo(() => {
+    const canvas = document.createElement('canvas')
+    canvas.width = 1536; canvas.height = 256
+    const ctx = canvas.getContext('2d')
+    if (ctx) {
+      // Face the illustration toward the lounge, matching the sign atlas.
+      ctx.translate(canvas.width, 0); ctx.scale(-1, 1)
+      const bay = canvas.width / 5
+      const palettes = [
+        ['#29343a', '#a69c82'], ['#4e372d', '#e0b37e'], ['#283e35', '#86ad8d'],
+        ['#26333c', '#899fa9'], ['#3e3b2d', '#c5a879'],
+      ]
+      palettes.forEach(([background, accent], index) => {
+        const left = index * bay + 22
+        const right = (index + 1) * bay - 22
+        ctx.fillStyle = background; ctx.fillRect(left, 9, right - left, 238)
+        ctx.globalAlpha = .2; ctx.fillStyle = accent; ctx.fillRect(left, 9, right - left, 238); ctx.globalAlpha = 1
+        ctx.fillStyle = '#1c272a'
+        for (let shelf = 0; shelf < 3; shelf++) {
+          const y = 74 + shelf * 58
+          ctx.fillRect(left + 12, y, right - left - 24, 6)
+          for (let item = 0; item < 12; item++) {
+            const height = 16 + ((item * 17 + index * 11 + shelf * 7) % 24)
+            const x = left + 22 + item * 18
+            ctx.fillStyle = item % 4 === 0 ? accent : index === 2 ? '#6b9471' : '#8d9189'
+            ctx.fillRect(x, y - height, 10 + (item % 3) * 2, height)
+          }
+          ctx.fillStyle = '#1c272a'
+        }
+        ctx.fillStyle = '#d9bc86'; ctx.globalAlpha = .32
+        ctx.fillRect(left + 12, 11, right - left - 24, 10)
+        ctx.globalAlpha = 1
+        const reflection = ctx.createLinearGradient(left, 0, right, 0)
+        reflection.addColorStop(0, 'rgba(200,220,225,0)')
+        reflection.addColorStop(.55, 'rgba(200,220,225,.12)')
+        reflection.addColorStop(.85, 'rgba(200,220,225,0)')
+        ctx.fillStyle = reflection; ctx.fillRect(left, 9, right - left, 238)
+      })
+    }
+    const texture = new THREE.CanvasTexture(canvas)
+    texture.colorSpace = THREE.SRGBColorSpace
+    texture.wrapS = THREE.RepeatWrapping
+    texture.repeat.x = -1; texture.offset.x = 1
+    texture.anisotropy = 4
+    return texture
+  }, [])
   useLayoutEffect(() => {
     const dummy = new THREE.Object3D()
-    const populate = (mesh: THREE.InstancedMesh | null, matrices: THREE.Matrix4[]) => {
-      if (!mesh) return
-      matrices.forEach((matrix, index) => mesh.setMatrixAt(index, matrix))
-      mesh.instanceMatrix.needsUpdate = true
-      mesh.computeBoundingSphere()
-      dummy.clear()
+    for (let index = 0; index < 5; index++) {
+      const x = (index - 2) * 4.7
+      dummy.position.set(x, .58, 32.1)
+      dummy.scale.set(4.6, 3.46, 2.55)
+      dummy.updateMatrix()
+      bodyRef.current?.setMatrixAt(index, dummy.matrix)
+      bodyRef.current?.setColorAt(index, new THREE.Color(['#92958b', '#998f81', '#7f9295', '#a09a8d', '#858e85'][index]))
+      dummy.position.set(x, .23, 30.808)
+      dummy.scale.set(3.95, 1.85, .04)
+      dummy.updateMatrix()
+      glazingRef.current?.setMatrixAt(index, dummy.matrix)
+      dummy.position.set(x, 1.42, 30.55)
+      dummy.scale.set(4.15, .1, .78)
+      dummy.updateMatrix()
+      awningRef.current?.setMatrixAt(index, dummy.matrix)
+      awningRef.current?.setColorAt(index, new THREE.Color(['#465854', '#624a42', '#53605c', '#4e5b62', '#665b46'][index]))
+      for (let mullion = 0; mullion < 3; mullion++) {
+        dummy.position.set(x + (mullion - 1) * 1.27, .23, 30.78)
+        dummy.scale.set(.055, 1.88, .11)
+        dummy.updateMatrix()
+        frameRef.current?.setMatrixAt(index * 3 + mullion, dummy.matrix)
+      }
     }
-    populate(litRef.current, transforms.lit)
-    populate(darkRef.current, transforms.dark)
-  }, [transforms])
-
-  useFrame(() => {
-    litMaterial.emissiveIntensity = 0.06 + environment.windowGlow
-  })
-  useEffect(() => () => geometry.dispose(), [geometry])
-
-  return <>
-    {transforms.dark.length > 0 && <instancedMesh ref={darkRef} args={[geometry, darkMaterial, transforms.dark.length]} castShadow={false} receiveShadow={false} />}
-    {transforms.lit.length > 0 && <instancedMesh ref={litRef} args={[geometry, litMaterial, transforms.lit.length]} castShadow={false} receiveShadow={false} />}
-  </>
-}
-
-function TowerSection({ tower, section, index }: { tower: Tower, section: Section, index: number }) {
-  const rounded = tower.style === 'rounded'
-  return <group position={[0, section.bottom + section.height / 2, 0]}>
-    {rounded
-      ? <RoundedBox args={[section.width, section.height, section.depth]} radius={0.12} smoothness={3} castShadow receiveShadow>
-        <meshStandardMaterial color={tower.tone} roughness={0.56} metalness={0.42} />
-      </RoundedBox>
-      : <mesh castShadow receiveShadow>
-        <boxGeometry args={[section.width, section.height, section.depth]} />
-        <meshStandardMaterial color={tower.tone} roughness={0.62} metalness={0.36} />
-      </mesh>}
-    <WindowGrid width={section.width * 0.86} depth={section.depth} height={section.height * 0.84}
-      floors={Math.max(2, Math.floor(section.height / 0.72))} seed={tower.seed + index * 13} />
-  </group>
-}
-
-function Tower({ tower }: { tower: Tower }) {
-  const sections = useMemo(() => sectionsFor(tower), [tower])
-  return <group position={[tower.x, -1.15, tower.z]}>
-    {sections.map((section, index) => <TowerSection key={section.index} tower={tower} section={section} index={index} />)}
-    {tower.antenna && <group position={[0, tower.height, 0]}>
-      <mesh position={[0, 0.85, 0]}>
-        <cylinderGeometry args={[0.024, 0.055, 1.7, 8]} />
-        <meshStandardMaterial color="#66767a" metalness={0.8} roughness={0.3} />
-      </mesh>
-      <mesh position={[0, 1.72, 0]}>
-        <sphereGeometry args={[0.075, 8, 6]} />
-        <meshStandardMaterial color="#f4b87d" emissive="#e59760" emissiveIntensity={0.38} />
-      </mesh>
-    </group>}
-    {tower.style === 'taipei' && <mesh position={[0, tower.height + 0.16, 0]}>
-      <boxGeometry args={[tower.width * 0.22, 0.32, tower.depth * 0.25]} />
-      <meshStandardMaterial color="#8a7960" metalness={0.65} roughness={0.4} />
-    </mesh>}
-    {tower.style === 'stacked' && <mesh position={[tower.width * 0.37, tower.height * 0.55, 0]}>
-      <boxGeometry args={[tower.width * 0.18, 0.7, tower.depth * 0.22]} />
-      <meshStandardMaterial color="#68777a" metalness={0.75} roughness={0.38} />
-    </mesh>}
-  </group>
-}
-
-function Skyline() {
-  return <group>
-    <mesh position={[0, -1.42, -33]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow={false}>
-      <planeGeometry args={[100, 86]} />
-      <meshStandardMaterial color="#17232b" roughness={0.98} metalness={0.05} />
+    for (const mesh of [bodyRef.current, glazingRef.current, awningRef.current, frameRef.current]) {
+      if (!mesh) continue
+      mesh.instanceMatrix.needsUpdate = true
+      if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true
+      mesh.computeBoundingSphere()
+    }
+  }, [])
+  useFrame(() => { glassMaterial.emissiveIntensity = .07 + environment.windowGlow * .32 })
+  useEffect(() => () => {
+    box.dispose(); bodyMaterial.dispose(); glassMaterial.dispose(); awningMaterial.dispose(); frameMaterial.dispose()
+    signTexture.dispose(); shopWindowTexture.dispose()
+  }, [box, bodyMaterial, glassMaterial, awningMaterial, frameMaterial, signTexture, shopWindowTexture])
+  return <group name="downtown shopfronts" position={[0, 0, -1.3]}>
+    <mesh position={[0, -1.08, 29.98]}>
+      <boxGeometry args={[25.2, .13, 2.1]} />
+      <meshStandardMaterial color="#78817d" roughness={.96} />
     </mesh>
-    {skyline.map((tower) => <Tower key={tower.seed} tower={tower} />)}
+    <instancedMesh ref={bodyRef} args={[box, bodyMaterial, 5]} castShadow={false} receiveShadow={false} />
+    <instancedMesh ref={glazingRef} args={[box, glassMaterial, 5]} castShadow={false} receiveShadow={false} />
+    <mesh position={[0, .23, 30.745]} rotation={[0, Math.PI, 0]}>
+      <planeGeometry args={[23.5, 1.85]} />
+      <meshBasicMaterial map={shopWindowTexture} transparent depthWrite={false} toneMapped={false} />
+    </mesh>
+    <instancedMesh ref={awningRef} args={[box, awningMaterial, 5]} castShadow={false} receiveShadow={false} />
+    <instancedMesh ref={frameRef} args={[box, frameMaterial, 15]} castShadow={false} receiveShadow={false} />
+    <mesh position={[0, 1.94, 30.785]} rotation={[0, Math.PI, 0]}>
+      <planeGeometry args={[23.5, .92]} />
+      <meshBasicMaterial map={signTexture} toneMapped={false} />
+    </mesh>
   </group>
 }
 
@@ -266,7 +451,7 @@ function WeatherClouds({ count, weather, reducedMotion }: { count: number, weath
   const stormy = weather === 'thunderstorm'
   const nightTone = useMemo(() => new THREE.Color(stormy ? '#14212d' : '#343f47'), [stormy])
   const dayTone = useMemo(() => new THREE.Color(stormy ? '#7b8796' : weather === 'clear' ? '#fff4e0' : '#e0e6e6'), [stormy, weather])
-  const materials = useMemo(() => Array.from({ length: 4 }, (_, index) => new THREE.MeshBasicMaterial({
+  const materials = useMemo(() => Array.from({ length: Math.min(4, count) }, (_, index) => new THREE.MeshBasicMaterial({
     map: createCloudTexture(index + 1),
     color: '#75838a',
     transparent: true,
@@ -275,7 +460,7 @@ function WeatherClouds({ count, weather, reducedMotion }: { count: number, weath
     alphaTest: 0.012,
     depthWrite: false,
     side: THREE.DoubleSide,
-  })), [stormy, weather])
+  })), [count, stormy, weather])
   const positions = useMemo(() => {
     // Broad cloud banks live beyond the buildings, rather than miniature
     // clouds hovering immediately outside a window.
@@ -440,12 +625,14 @@ function Lightning({ reducedMotion }: { reducedMotion: boolean }) {
 
 export default function LoftCity({ mobile, reducedMotion }: { mobile: boolean, reducedMotion: boolean }) {
   const { weather } = useLoftEnvironment()
-  const cloudCount = weather === 'thunderstorm' ? 7 : weather === 'rain' ? 5 : weather === 'cloudy' || weather === 'snow' ? 4 : 2
+  const cloudCount = weather === 'thunderstorm' ? 7 : weather === 'rain' ? 5 : weather === 'cloudy' || weather === 'snow' ? 4 : weather === 'fog' ? 2 : 1
   const hasRain = weather === 'rain' || weather === 'thunderstorm'
 
   return <group name="loft exterior city">
+    <CityGround />
+    <CityShops />
     <Skyline />
-    <group rotation={[0, Math.PI, 0]} position={[0, 0, 4]}><Skyline /></group>
+    <group rotation={[0, Math.PI, 0]} position={[0, 0, 12]}><Skyline /></group>
     <Suspense fallback={null}>
       <CityAssetBoundary><ImportedFacade /></CityAssetBoundary>
     </Suspense>

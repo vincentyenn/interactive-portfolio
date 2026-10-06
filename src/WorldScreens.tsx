@@ -47,7 +47,7 @@ export function usePortfolioTerminal(onNavigate: (focus: Focus) => void) {
     const link = (label: string, href: string) => response.push(makeLine('link', label, href))
     switch (command) {
       case 'help':
-        output('COMMANDS  whoami  about  education  experience  projects  contact  github  linkedin  clear  room')
+        output('COMMANDS  whoami  about  education  experience  projects  skills  contact  github  linkedin  clear  room')
         output('Use room, back, or exit to return to the loft.')
         break
       case 'whoami':
@@ -68,14 +68,20 @@ export function usePortfolioTerminal(onNavigate: (focus: Focus) => void) {
         break
       case 'projects':
         portfolio.projects.forEach((project, index) => {
-          output(`0${index + 1}  ${project.title} · ${project.category} · ${project.year}`)
+          output(`0${index + 1}  ${project.title} · ${project.category} · ${project.status}`)
           output(project.summary)
+          project.highlights.forEach(output)
+          project.links.forEach((item) => link(item.label, item.url))
         })
+        break
+      case 'skills':
+        output(`TECHNICAL TOOLKIT  ${portfolio.skills.join(' · ')}`)
         break
       case 'contact':
         output('Find me online:')
         link('GitHub', portfolio.links.github)
         link('LinkedIn', portfolio.links.linkedin)
+        link('Devpost', portfolio.links.devpost)
         break
       case 'github':
         link('Open GitHub profile', portfolio.links.github)
@@ -185,6 +191,11 @@ export function ProjectScreen({ project, index, onBack }: {
       <p className="world-screen-kicker">{project.category}</p>
       <h2>{project.title}</h2>
       <p className="world-project-summary">{project.summary}</p>
+      <div className="world-project-gallery" aria-label={`${project.title} screenshots`}>
+        {project.images.map((image) => <figure key={image.src}>
+          <img src={`${import.meta.env.BASE_URL}${image.src}`} alt={image.alt} />
+        </figure>)}
+      </div>
       <dl className="world-project-facts">
         <div><dt>YEAR</dt><dd>{project.year}</dd></div>
         <div><dt>STATUS</dt><dd>{project.status}</dd></div>
@@ -193,8 +204,15 @@ export function ProjectScreen({ project, index, onBack }: {
         <p className="world-screen-kicker">BUILT WITH</p>
         <ul>{project.tools.map((tool) => <li key={tool}>{tool}</li>)}</ul>
       </div>
-      {'repository' in project && project.repository && <a className="world-project-repo"
-        href={project.repository} target="_blank" rel="noreferrer">VIEW REPOSITORY <span aria-hidden="true">↗</span></a>}
+      <div className="world-project-highlights">
+        <p className="world-screen-kicker">PROJECT NOTES</p>
+        <ul>{project.highlights.map((highlight) => <li key={highlight}>{highlight}</li>)}</ul>
+      </div>
+      <div className="world-project-links">
+        {project.links.map((link) => <a key={link.url} href={link.url} target="_blank" rel="noreferrer">
+          {link.label}<span aria-hidden="true">↗</span>
+        </a>)}
+      </div>
       <p className="world-project-scroll-hint">Scroll the sheet for details · Use “Blueprints” to choose another</p>
     </div>
   </article>

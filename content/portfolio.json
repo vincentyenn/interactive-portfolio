@@ -1,55 +1,132 @@
 {
   "name": "Vincent Yen",
-  "role": "Computer science student and creative developer",
-  "summary": "I build thoughtful web experiences, explore secure systems, and tell stories behind the camera.",
-  "about": "I study computer science at Texas A&M with a cybersecurity minor. I enjoy building interactive products, learning how systems stay reliable, and capturing Aggie football through videography. Music, sports, and cooking keep me curious outside the screen.",
-  "education": "Texas A&M University · B.S. Computer Science · Cybersecurity minor",
+  "role": "Computer science student · software developer",
+  "summary": "Texas A&M computer science student building useful software across geospatial tools, AI, and web applications.",
+  "about": "I'm Vincent, a Texas A&M computer science student minoring in cybersecurity. I like building software that makes complicated work easier to navigate, from weather-aware flight routing to turning a learning goal into a concrete plan.",
+  "outsideOfCode": "Outside class, I follow sports, film Aggie football, spend time with friends, listen to music, cook, and travel.",
+  "education": "Texas A&M University · B.S. Computer Science · Cybersecurity minor · Expected May 2028",
+  "aboutPhotos": [
+    { "src": "images/about/friends.jpg", "alt": "Vincent with friends wearing Texas A&M shirts.", "caption": "With friends at Texas A&M" },
+    { "src": "images/about/goat-day.jpg", "alt": "Vincent spending time outdoors beside a goat.", "caption": "A day outdoors" },
+    { "src": "images/about/videography.jpg", "alt": "Vincent filming from the stadium stands.", "caption": "Filming Aggie football" }
+  ],
+  "skills": [
+    "Java",
+    "Python",
+    "C++",
+    "SQL",
+    "JavaScript",
+    "HTML / CSS",
+    "React",
+    "Node.js",
+    "Flask",
+    "TensorFlow",
+    "PyTorch",
+    "Git",
+    "GitHub",
+    "GitLab"
+  ],
   "experience": [
     {
       "company": "USAA",
       "role": "Software Engineering Intern",
-      "period": "Summer 2026",
-      "summary": "Shipped improvements to a production auto claims experience using React, TypeScript, Java, and Spring Boot."
+      "period": "May-Aug 2026",
+      "location": "Plano, Texas",
+      "summary": "Delivered 20+ production enhancements to USAA's React 18 Auto Digital First Notice of Loss application, part of a claims platform handling 600K-670K auto claims annually.",
+      "highlights": [
+        "Resolved React Context synchronization across dynamically added vehicles, passengers, drivers, and incident details.",
+        "Fixed API payload mismatches between React and Java Spring Boot services that caused invalid claim submissions.",
+        "Added conditional Formik and Yup validation across 35+ claim workflow sections."
+      ],
+      "tools": ["React 18", "TypeScript", "Java", "Spring Boot", "Formik", "Yup"]
     },
     {
       "company": "The University of Texas at Dallas",
       "role": "Research Intern",
-      "period": "Summer 2023",
-      "summary": "Worked with a five-person team on machine-learning tools for accessible text simplification."
+      "period": "Jun-Aug 2023",
+      "location": "Richardson, Texas",
+      "summary": "Built a BERT-based text simplification tool and fine-tuned TensorFlow NLP models with a five-person accessibility research team.",
+      "highlights": [
+        "Reached over 85% accuracy on long-text summaries.",
+        "Reduced model training time by 25% while improving classification accuracy by 10%.",
+        "Helped integrate machine-learning prototypes into deployable accessibility tools."
+      ],
+      "tools": ["Python", "TensorFlow", "BERT", "Natural language processing"]
     }
   ],
   "projects": [
     {
-      "id": "personal-website",
-      "title": "Personal Website",
-      "category": "Portfolio system",
+      "id": "tamuflight",
+      "title": "TAMUFlight",
+      "category": "Flight operations · TAMUHack 2026",
       "year": "2026",
-      "status": "In progress",
-      "summary": "A personal portfolio shaped like a music library, designed to make exploring work feel natural.",
-      "tools": ["React", "TypeScript", "GSAP", "Three.js"],
-      "repository": "https://github.com/vincentyenn/portfolio"
+      "status": "Team hackathon build",
+      "images": [
+        { "src": "images/projects/tamuflight-1.jpg", "alt": "TAMUFlight mission control map showing flights and proposed reroutes." },
+        { "src": "images/projects/tamuflight-2.jpg", "alt": "TAMUFlight weather radar overlaid on aircraft routes and disruption data." }
+      ],
+      "summary": "A real-time flight disruption dashboard for airport operations: track aircraft, monitor live weather, and find alternate routes around storms.",
+      "highlights": [
+        "Visualizes live flights, precipitation radar, cloud cover, and storm events on a Mapbox map.",
+        "Uses Dijkstra's algorithm to find weather-aware routes and prioritize emergency flights.",
+        "Combines cache-first API access, GPU detection, and client-side route calculations for responsive analysis."
+      ],
+      "tools": ["React", "Mapbox GL JS", "Python / FastAPI", "NetworkX / Dijkstra", "FlightAware", "RainViewer", "Gemini"],
+      "links": [
+        { "label": "Devpost project", "url": "https://devpost.com/software/tamuflight" },
+        { "label": "GitHub repository", "url": "https://github.com/SaptiSD/TamuHack26" }
+      ]
     },
     {
-      "id": "coursework-archive",
-      "title": "Coursework Archive",
-      "category": "Web collection",
-      "year": "2026",
-      "status": "Curating",
-      "summary": "Selected technical work organized around the decisions, constraints, and lessons behind each build.",
-      "tools": ["JavaScript", "HTML", "CSS"]
+      "id": "atlas",
+      "title": "Atlas",
+      "category": "Grocery comparison · HackRice 15",
+      "year": "2025",
+      "status": "Team hackathon build",
+      "images": [
+        { "src": "images/projects/atlas-1.jpg", "alt": "Atlas grocery comparison landing page." },
+        { "src": "images/projects/atlas-2.jpg", "alt": "Atlas shopping interface with item search." },
+        { "src": "images/projects/atlas-3.jpg", "alt": "Atlas page explaining grocery search and wishlist features." }
+      ],
+      "summary": "A location-aware grocery search that compares nearby prices, stock, and availability so shoppers can find a better deal within 10 miles.",
+      "highlights": [
+        "Connects Walmart and Kroger product data, handling HMAC signing and OAuth 2.0 authentication.",
+        "Normalizes different retailer responses and filters stores by distance with the Haversine formula.",
+        "Caches searches in MongoDB to reduce repeated API requests."
+      ],
+      "tools": ["Next.js / React", "Node.js / Express", "MongoDB", "Walmart API", "Kroger API"],
+      "links": [
+        { "label": "Devpost project", "url": "https://devpost.com/software/atlas-08p5ha" },
+        { "label": "Live demo", "url": "https://frabjous-hamster-5c948c.netlify.app/" }
+      ]
     },
     {
-      "id": "interface-experiments",
-      "title": "Interface Experiments",
-      "category": "Interaction studies",
-      "year": "2026",
-      "status": "Ongoing",
-      "summary": "Focused prototypes exploring motion, hierarchy, and the feel of responsive interfaces.",
-      "tools": ["React", "GSAP", "Prototyping"]
+      "id": "simplylearn",
+      "title": "SimplyLearn",
+      "category": "AI learning planner · Build4Good 2025",
+      "year": "2025",
+      "status": "2nd place · Beginner Hack",
+      "images": [
+        { "src": "images/projects/simplylearn-1.jpg", "alt": "SimplyLearn home page introducing its AI learning planner." },
+        { "src": "images/projects/simplylearn-2.jpg", "alt": "SimplyLearn form for generating a study plan." },
+        { "src": "images/projects/simplylearn-3.jpg", "alt": "SimplyLearn study tasks organized in a Notion database." }
+      ],
+      "summary": "An AI learning planner that turns a broad goal into clear steps, then organizes the goal and tasks in the learner's Notion workspace.",
+      "highlights": [
+        "Uses Gemini to turn a learning goal into a structured plan and actionable to-do list.",
+        "Creates a dedicated Notion page and task database through the Notion API.",
+        "Built with a Python and Flask workflow, including input validation and API error handling."
+      ],
+      "tools": ["Python", "Flask", "Gemini API", "Notion API", "HTML / Tailwind"],
+      "links": [
+        { "label": "Devpost project", "url": "https://devpost.com/software/simplylearn" },
+        { "label": "GitHub repository", "url": "https://github.com/SaptiSD/TACS_Build_4_Good" }
+      ]
     }
   ],
   "links": {
     "github": "https://github.com/vincentyenn",
-    "linkedin": "https://www.linkedin.com/in/vincentcyen/"
+    "linkedin": "https://www.linkedin.com/in/vincentcyen/",
+    "devpost": "https://devpost.com/vincentyenn"
   }
 }

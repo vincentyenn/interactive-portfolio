@@ -1,7 +1,7 @@
-export type Weather = 'clear' | 'cloudy' | 'rain' | 'thunderstorm' | 'snow'
+export type Weather = 'clear' | 'cloudy' | 'fog' | 'rain' | 'thunderstorm' | 'snow'
 
-const WEATHER_KEY = 'loft-weather-v1'
-const weatherValues: Weather[] = ['clear', 'cloudy', 'rain', 'thunderstorm', 'snow']
+const WEATHER_KEY = 'loft-weather-v2'
+const weatherValues: Weather[] = ['clear', 'cloudy', 'fog', 'rain', 'thunderstorm', 'snow']
 
 function isSouthernHemisphere(timeZone: string) {
   return /^(Australia\/|Antarctica\/(?!Troll)|Pacific\/(Auckland|Chatham|Fiji|Apia|Tongatapu|Port_Moresby|Noumea|Guadalcanal|Port_Vila|Funafuti|Nauru|Tarawa|Wallis|Majuro|Pohnpei|Chuuk|Efate)|America\/(Argentina|Sao_Paulo|Campo_Grande|Bahia|Belem|Fortaleza|Maceio|Recife|Porto_Velho|Manaus|Boa_Vista|Cuiaba|Eirunepe|Rio_Branco|Montevideo|Santiago|Punta_Arenas|Asuncion|Paramaribo|Cayenne)|Africa\/(Johannesburg|Maputo|Harare|Lusaka|Windhoek|Gaborone|Blantyre|Mbabane|Maseru))/.test(timeZone)
@@ -33,17 +33,18 @@ export function getVisitWeather(): Weather {
   }
 
   let weights: [Weather, number][] = [
-    ['clear', 40],
-    ['cloudy', 35],
-    ['rain', 15],
-    ['thunderstorm', 10],
+    ['clear', 63],
+    ['cloudy', 20],
+    ['fog', 5],
+    ['rain', 8],
+    ['thunderstorm', 4],
   ]
   try {
     const now = new Date()
     const month = now.getMonth()
     const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone
     const northernWinter = (month === 10 || month === 11 || month === 0 || month === 1) && !isSouthernHemisphere(timeZone)
-    if (northernWinter) weights = [['clear', 35], ['cloudy', 30], ['rain', 15], ['thunderstorm', 10], ['snow', 10]]
+    if (northernWinter) weights = [['clear', 53], ['cloudy', 17], ['fog', 6], ['rain', 8], ['thunderstorm', 4], ['snow', 12]]
   } catch {
     // Fall back to the all-season distribution when locale data is unavailable.
   }

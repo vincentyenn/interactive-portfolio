@@ -56,13 +56,13 @@ function keyframe(at: number, sky: string, fog: string, ambient: string, hemisph
 }
 
 const lightingCycle = [
-  keyframe(0, '#8ba9b2', '#83979d', '#bec9c2', '#a9c5d0', '#4a4439', '#f4dfc3', 1, 15, 58, 0.98),
-  keyframe(0.28, '#8ba9b2', '#83979d', '#bec9c2', '#a9c5d0', '#4a4439', '#f4dfc3', 1, 15, 58, 0.98),
+  keyframe(0, '#80b4cd', '#9ab7c4', '#bec9c2', '#b2d1df', '#4a4439', '#ffe1b6', 1, 15, 58, 0.98),
+  keyframe(0.28, '#80b4cd', '#9ab7c4', '#bec9c2', '#b2d1df', '#4a4439', '#ffe1b6', 1, 15, 58, 0.98),
   keyframe(0.42, '#c17e60', '#9e6d5d', '#d2a083', '#e3ad83', '#3a302d', '#ffad76', 0.58, 12, 49, 0.9),
   keyframe(0.56, '#182532', '#1a252d', '#61717a', '#586c7a', '#171c20', '#7187a1', 0.16, 10, 38, 0.82),
   keyframe(0.81, '#111e2b', '#17232d', '#596c79', '#536a7e', '#151b20', '#687c94', 0.12, 10, 38, 0.82),
   keyframe(0.93, '#536779', '#465864', '#8b9190', '#889baa', '#2a2929', '#d7a787', 0.38, 12, 47, 0.84),
-  keyframe(1, '#8ba9b2', '#83979d', '#bec9c2', '#a9c5d0', '#4a4439', '#f4dfc3', 1, 15, 58, 0.98),
+  keyframe(1, '#80b4cd', '#9ab7c4', '#bec9c2', '#b2d1df', '#4a4439', '#ffe1b6', 1, 15, 58, 0.98),
 ]
 
 const scratchSky = new THREE.Color()
@@ -109,8 +109,8 @@ function DynamicLighting({ state, reducedMotion }: { state: LoftEnvironmentState
   const sunRef = useRef<THREE.DirectionalLight>(null)
   const windowBounce = useRef<THREE.PointLight>(null)
   const practicalLights = useRef<Array<THREE.PointLight | null>>([])
-  const weatherTint = useMemo(() => new THREE.Color(state.weather === 'thunderstorm' ? '#52616f' : '#9caeb9'), [state.weather])
-  const cloudCover = { clear: 0, cloudy: .68, rain: .86, thunderstorm: .97, snow: .8 }[state.weather]
+  const weatherTint = useMemo(() => new THREE.Color(state.weather === 'thunderstorm' ? '#52616f' : state.weather === 'fog' ? '#b2b7b3' : '#9caeb9'), [state.weather])
+  const cloudCover = { clear: 0, cloudy: .58, fog: .72, rain: .86, thunderstorm: .97, snow: .8 }[state.weather]
   const sunTarget = useMemo(() => new THREE.Object3D(), [])
   const skyRef = useRef(new THREE.Color('#8ba9b2'))
   const fogRef = useRef(new THREE.Fog('#83979d', 15, 58))
@@ -135,8 +135,11 @@ function DynamicLighting({ state, reducedMotion }: { state: LoftEnvironmentState
 
     skyRef.current.copy(sampled.sky).lerp(weatherTint, cloudCover * sampled.daylight * .65)
     fogRef.current.color.copy(sampled.fog).lerp(weatherTint, cloudCover * sampled.daylight * .52)
-    fogRef.current.near = sampled.fogNear + 5
-    fogRef.current.far = sampled.fogFar * (1 - cloudCover * .25)
+    // Clear days keep the near skyline crisp. Dense haze is its own visit weather.
+    const visibility = state.weather === 'fog' ? .75 : state.weather === 'thunderstorm' ? .52
+      : state.weather === 'rain' || state.weather === 'snow' ? .7 : state.weather === 'cloudy' ? 1.15 : 2.5
+    fogRef.current.near = Math.max(6, sampled.fogNear * visibility)
+    fogRef.current.far = sampled.fogFar * visibility
     scene.background = skyRef.current
     scene.fog = fogRef.current
 

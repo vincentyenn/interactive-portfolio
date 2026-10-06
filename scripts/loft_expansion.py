@@ -9,7 +9,7 @@ from mathutils import Matrix
 
 
 def expand_loft(env):
-    cube, tube, cylinder, sphere, imported = (env[key] for key in ('cube', 'tube', 'cylinder', 'sphere', 'imported'))
+    cube, tube, cylinder, sphere, imported, torus = (env[key] for key in ('cube', 'tube', 'cylinder', 'sphere', 'imported', 'torus'))
     simple, xyz, layout, zones = (env[key] for key in ('simple', 'xyz', 'layout', 'zones'))
     oak, veneer, steel, plaster, concrete, cream, glow = (env[key] for key in ('oak', 'veneer', 'black', 'plaster', 'concrete', 'cream', 'glow'))
     scale = Matrix.Diagonal((layout['shellScale'][0], layout['shellScale'][2], 1, 1))
@@ -51,53 +51,107 @@ def expand_loft(env):
     cube('lounge ceiling', (0, 6.28, 10.1), (16, .24, 8.45), env['dark'])
     for z in (7.2, 10.2, 13.2):
         cube('lounge ceiling cross beam', (0, 5.99, z), (15.8, .22, .17), oak)
-    # A clerestory keeps the rear room enclosed without blocking its city light.
-    cube('lounge rear lower wall', (0, 1.7, 14.15), (16, 3.4, .22), plaster)
-    cube('lounge rear upper wall', (0, 6.0, 14.15), (16, .6, .22), plaster)
-    for x in (-7.7, -4, 0, 4, 7.7):
-        cube('lounge rear window pier', (x, 4.55, 14.15), (.24, 2.3, .22), steel)
-    for y in (3.4, 5.7):
+    # Full-height glazing makes the city part of the living room, as in the
+    # reference loft. The glass is intentionally open geometry for the browser
+    # renderer; the mullions and sill give the opening its architectural edge.
+    cube('lounge rear lower wall', (0, .27, 14.15), (16, .54, .22), plaster)
+    cube('lounge rear upper wall', (0, 6.06, 14.15), (16, .48, .22), plaster)
+    for x in (-7.7, 7.7):
+        cube('lounge rear window pier', (x, 3.17, 14.15), (.24, 5.25, .22), steel)
+    for x in (-5.5, -3.3, -1.1, 1.1, 3.3, 5.5):
+        cube('lounge rear window mullion', (x, 3.17, 14.15), (.13, 5.25, .18), steel)
+    # The uninterrupted height makes each pane feel vertical while the glazing
+    # still spans the full rear wall of the loft.
+    for y in (.58, 5.76):
         cube('lounge rear window transom', (0, y, 14.12), (16, .09, .12), steel)
     cube('lounge rear skirting', (0, .075, 13.98), (15.8, .15, .12), veneer)
 
-    fabric = env['texture']('lounge woven linen', 'rough_linen', 3.0)
-    olive = simple('moss green upholstery', (.18, .23, .19), .94)
-    rug = simple('sand woven rug', (.49, .43, .33), .99)
-    cube('lounge wool rug', (.5, .018, 10.55), (7.1, .028, 4.1), rug, .08, 5)
-    cube('lounge sofa oak plinth', (.55, .18, 12.18), (4.35, .2, 1.35), oak, .05, 5)
+    leather = simple('lounge aged leather', (.47, .25, .16), .71)
+    leather_nodes = leather.node_tree.nodes
+    leather_links = leather.node_tree.links
+    leather_bsdf = leather_nodes.get('Principled BSDF')
+    leather_coord = leather_nodes.new('ShaderNodeTexCoord')
+    leather_mapping = leather_nodes.new('ShaderNodeMapping')
+    leather_mapping.inputs['Scale'].default_value = (2.3, 2.3, 2.3)
+    leather_links.new(leather_coord.outputs['UV'], leather_mapping.inputs['Vector'])
+    leather_diffuse = leather_nodes.new('ShaderNodeTexImage')
+    leather_diffuse.image = bpy.data.images.load(str(env['GRAPHICS'] / 'lounge_leather.png'), check_existing=True)
+    leather_links.new(leather_mapping.outputs['Vector'], leather_diffuse.inputs['Vector'])
+    leather_links.new(leather_diffuse.outputs['Color'], leather_bsdf.inputs['Base Color'])
+    leather_normal_image = leather_nodes.new('ShaderNodeTexImage')
+    leather_normal_image.image = bpy.data.images.load(str(env['SOURCE'] / 'textures' / 'concrete_floor_worn_001' / 'concrete_floor_worn_001_nor_gl_1k.jpg'), check_existing=True)
+    leather_normal_image.image.colorspace_settings.name = 'Non-Color'
+    leather_normal = leather_nodes.new('ShaderNodeNormalMap')
+    leather_normal.inputs['Strength'].default_value = .1
+    leather_links.new(leather_mapping.outputs['Vector'], leather_normal_image.inputs['Vector'])
+    leather_links.new(leather_normal_image.outputs['Color'], leather_normal.inputs['Color'])
+    leather_links.new(leather_normal.outputs['Normal'], leather_bsdf.inputs['Normal'])
+    charcoal = simple('lounge charcoal upholstery', (.08, .085, .085), .91)
+    olive = simple('moss book cloth', (.18, .23, .19), .94)
+    rug = simple('lounge woven wool rug', (.23, .23, .22), .98)
+    rug_nodes = rug.node_tree.nodes
+    rug_normal_image = rug_nodes.new('ShaderNodeTexImage')
+    rug_normal_image.image = bpy.data.images.load(str(env['SOURCE'] / 'textures' / 'rough_linen' / 'rough_linen_nor_gl_1k.jpg'), check_existing=True)
+    rug_normal_image.image.colorspace_settings.name = 'Non-Color'
+    rug_normal = rug_nodes.new('ShaderNodeNormalMap')
+    rug_normal.inputs['Strength'].default_value = .26
+    rug.node_tree.links.new(rug_normal_image.outputs['Color'], rug_normal.inputs['Color'])
+    rug.node_tree.links.new(rug_normal.outputs['Normal'], rug_nodes.get('Principled BSDF').inputs['Normal'])
+    cube('lounge wool rug', (.4, .018, 10.48), (8.45, .028, 4.35), rug, .012, 3)
+    binding = simple('lounge rug binding', (.15, .16, .15), .99)
+    for x in (-3.77, 4.57):
+        cube('lounge rug bound edge', (x, .038, 10.48), (.025, .007, 4.26), binding, .003)
+    for z in (8.35, 12.61):
+        cube('lounge rug bound edge', (.4, .038, z), (8.36, .007, .025), binding, .003)
+    # Upholstery has generous radii and a low continuous silhouette; the
+    # tailored seams and surface irregularity are finished in loft_realism.py.
+    cube('lounge sofa leather rail', (.55, .58, 12.73), (4.9, 1.02, .28), leather, .12, 8)
+    cube('lounge sofa oak plinth', (.55, .2, 12.18), (4.75, .22, 1.5), steel, .07, 6)
     for i in range(3):
         x = -.82 + i * 1.37
-        cube('lounge sofa seat cushion', (x, .48, 12.02), (1.33, .34, 1.22), fabric, .14, 7)
-        back = cube('lounge sofa back cushion', (x, .98, 12.56), (1.34, .94, .36), fabric, .12, 7)
+        cube('lounge sofa seat cushion', (x, .49, 12.02), (1.33, .34, 1.22), leather, .16, 9)
+        back = cube('lounge sofa back cushion', (x, 1.02, 12.57), (1.34, .91, .36), leather, .14, 9)
         back.rotation_euler.x = math.radians(-8)
     for x in (-1.75, 2.86):
-        cube('lounge sofa armrest', (x, .68, 12.14), (.34, .86, 1.43), fabric, .14, 7)
-    pillow = cube('lounge loose olive pillow', (-.96, .94, 12.03), (.65, .62, .24), olive, .12, 7)
-    pillow.rotation_euler = (math.radians(-18), math.radians(9), math.radians(14))
-    # Rounded oak coffee table and slim listening console face the new camera.
-    cube('lounge coffee table top', (.35, .55, 9.92), (2.8, .12, 1.25), oak, .16, 8)
-    for x in (-.65, 1.35):
-        cube('lounge coffee table leg', (x, .25, 9.92), (.16, .5, .75), steel, .025)
-    for i in range(3):
-        cube('lounge stacked photo book', (-.38, .63 + i*.045, 9.92), (.72, .04, .52), (cream, olive, veneer)[i], .008)
-    cylinder('lounge ceramic bowl', (1.08, .7, 9.98), .19, .16, cream, 40)
-    cube('lounge record console', (4.8, .5, 11.65), (2.55, .72, .73), veneer, .045, 5)
-    for x in (3.85, 5.75):
-        for z in (11.43, 11.88):
-            cube('lounge console foot', (x, .12, z), (.055, .24, .055), steel)
-    for x in (4.13, 5.48):
-        cube('lounge speaker', (x, 1.1, 11.7), (.35, .52, .3), steel, .028, 4)
-        sphere('lounge speaker cone', (x, 1.12, 11.535), (.105, .105, .015), env['dark'])
-    cube('lounge record player base', (4.8, .935, 11.6), (.78, .12, .51), oak, .024, 5)
-    tube('lounge tonearm', (5.1, 1.035, 11.78), (4.94, 1.035, 11.45), .009, env['brass'], 12)
-    cylinder('lounge floor lamp base', (-3.1, .06, 11.45), .29, .12, steel, 48)
-    tube('lounge floor lamp stem', (-3.1, .12, 11.45), (-3.1, 1.98, 11.45), .021, env['brass'], 16)
-    cylinder('lounge linen lampshade', (-3.1, 1.85, 11.45), .31, .4, cream, 48)
-    # Use the detailed source armchair in the lounge, with a distinct node name.
+        cube('lounge sofa armrest', (x, .69, 12.14), (.38, .84, 1.52), leather, .18, 9)
+    pillow = cube('lounge loose olive pillow', (-.93, .93, 12.0), (.58, .55, .22), charcoal, .12, 7)
+    pillow.rotation_euler = (math.radians(-16), math.radians(7), math.radians(13))
+    # One low table keeps the seating area open and gives the personal objects a home.
+    stone = simple('lounge honed stone', (.22, .23, .22), .86)
+    cube('lounge coffee table top', (.15, .39, 9.86), (3.25, .095, 1.38), stone, .09, 7)
+    cube('lounge coffee table plinth', (.15, .19, 9.86), (2.18, .36, .9), steel, .04, 5)
+    cube('lounge photo book', (-.55, .46, 9.67), (.72, .045, .51), cream, .008)
+    cube('lounge photo book dark cover', (-.55, .488, 9.67), (.7, .012, .49), charcoal, .004)
+    cylinder('lounge ceramic bowl', (.47, .48, 9.98), .15, .11, cream, 32)
+    # A slim magazine and a cup add life without obscuring the interactive book.
+    magazine_cover = simple('lounge terracotta magazine cover', (.47, .25, .18), .9)
+    pages = cube('lounge magazine pages', (-1.05, .455, 9.42), (.53, .018, .34), cream, .003)
+    magazine = cube('lounge magazine cover', (-1.05, .47, 9.42), (.54, .009, .35), magazine_cover, .003)
+    pages.rotation_euler.z = magazine.rotation_euler.z = math.radians(9)
+    cube('lounge magazine masthead', (-1.05, .479, 9.31), (.38, .003, .025), cream, .001)
+    cup = simple('lounge matte espresso ceramic', (.68, .59, .47), .82)
+    cylinder('lounge cup saucer', (1.11, .455, 9.55), .18, .025, cup, 32)
+    cylinder('lounge cup body', (1.11, .53, 9.55), .105, .13, cup, 32)
+    torus('lounge cup rim', (1.11, .60, 9.55), .085, .013, cream)
+    cylinder('lounge coffee surface', (1.11, .595, 9.55), .075, .003, charcoal, 32)
+    for start, end in (((1.2,.57,9.55),(1.28,.57,9.55)),
+                       ((1.28,.57,9.55),(1.29,.49,9.55)),
+                       ((1.29,.49,9.55),(1.2,.49,9.55))):
+        tube('lounge cup handle', start, end, .013, cup, 10)
+    # The source chair has proper upholstery and a shaped frame. A pair on the
+    # right side faces the sofa instead of duplicating the music nook.
+    for index, center in enumerate(((-2.58, 0, 8.95), (-3.67, 0, 10.36))):
+        before = set(bpy.data.objects)
+        imported('modern_arm_chair_01', center, 1.18, rotation_z=math.radians(125 - index*20))
+        for obj in set(bpy.data.objects) - before:
+            obj.name = f'lounge guest chair {index+1} / ' + obj.name
+    cylinder('lounge floor lamp base', (4.42, .06, 11.1), .25, .12, steel, 40)
+    tube('lounge floor lamp stem', (4.42, .12, 11.1), (4.42, 1.93, 11.1), .017, env['brass'], 14)
+    cylinder('lounge linen lampshade', (4.42, 1.83, 11.1), .28, .36, cream, 40)
     before = set(bpy.data.objects)
-    imported('modern_arm_chair_01', (-3.7, 0, 9.5), 1.1, rotation_z=-math.pi / 3)
+    imported('potted_plant_04', (-5.7, 0, 12.25), 1.12)
     for obj in set(bpy.data.objects) - before:
-        obj.name = 'lounge reading chair / ' + obj.name
+        obj.name = 'lounge living plant / ' + obj.name
 
     # A real landing leads into the rear mezzanine studio; the stair void stays open.
     cube('upper studio landing extension', (-.8, 3.13, -4.453), (2.51, .26, 2.28), oak, .02)

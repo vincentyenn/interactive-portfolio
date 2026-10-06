@@ -1,18 +1,19 @@
 import * as THREE from 'three'
 import portfolio from '../content/portfolio.json'
 
-import layout, { offsetPoint } from './loftLayout'
+import layout from './loftLayout'
 
 type Point3 = [number, number, number]
 
 /** Coordinates stay aligned with the GLB's room space as the camera moves. */
-export const contactDoorView = {
-  hotspot: { position: offsetPoint([5.97, 1.55, -3.52], [1.79, 0, -0.8]), size: [0.38, 3.18, 1.94] as Point3 },
-  desktop: { position: offsetPoint([1.35, 2.1, -1], [1.79, 0, -0.8]), target: offsetPoint([5.98, 1.72, -2.8], [1.79, 0, -0.8]), fov: 42 },
-  mobile: { position: offsetPoint([1.85, 2.35, -2.8], [1.79, 0, -0.8]), target: offsetPoint([5.98, 1.28, -3.4], [1.79, 0, -0.8]), fov: 59 },
+export const CONTACT_CONSOLE_POSITION: Point3 = [7.68, 1.81, -2.55]
+export const contactConsoleView = {
+  hotspot: { position: [7.55, 1.8, -2.55] as Point3, size: [0.55, 1.75, 1.08] as Point3 },
+  desktop: { position: [5.45, 1.9, -2.42] as Point3, target: CONTACT_CONSOLE_POSITION, fov: 45 },
+  mobile: { position: [4.98, 1.83, -2.55] as Point3, target: CONTACT_CONSOLE_POSITION, fov: 55 },
 }
 
-const FIX_VERSION = 'door-poster-v1'
+const FIX_VERSION = 'door-poster-v2'
 const DOOR_CENTER_Z = layout.doorDepth
 const normalizedName = (name: string) => name.toLowerCase().replace(/[\s_.]+/g, ' ').trim()
 
@@ -47,6 +48,11 @@ function applyRoomTransform(root: THREE.Object3D, object: THREE.Object3D, transf
 function moveCenterX(root: THREE.Object3D, mesh: THREE.Mesh, x: number) {
   const center = boundsInRoom(root, mesh).getCenter(new THREE.Vector3())
   applyRoomTransform(root, mesh, new THREE.Matrix4().makeTranslation(x - center.x, 0, 0))
+}
+
+function moveCenterZ(root: THREE.Object3D, mesh: THREE.Mesh, z: number) {
+  const center = boundsInRoom(root, mesh).getCenter(new THREE.Vector3())
+  applyRoomTransform(root, mesh, new THREE.Matrix4().makeTranslation(0, 0, z - center.z))
 }
 
 function makeHollowDoorFrame() {
@@ -146,8 +152,9 @@ function embedDoor(root: THREE.Object3D) {
     ['contact sign frame', 0.086],
     ['contact hello sign', 0.104],
     ['door handle', 0.13],
-    ['intercom', 0.048],
-    ['intercom light', 0.101],
+    // Keep the imported intercom's switch and lamp visible on the new console bezel.
+    ['intercom', 0.22],
+    ['intercom light', 0.28],
   ]
   frame.geometry = makeHollowDoorFrame()
   for (const [name, depth] of parts) {
@@ -155,6 +162,13 @@ function embedDoor(root: THREE.Object3D) {
     if (!mesh) continue
     applyRoomTransform(root, mesh, transform)
     moveCenterX(root, mesh, wallFaceX - depth)
+    if (name === 'intercom' || name === 'intercom light') {
+      moveCenterZ(root, mesh, CONTACT_CONSOLE_POSITION[2] + .44)
+    }
+  }
+  for (const name of ['contact sign frame', 'contact hello sign']) {
+    const sign = findMesh(root, name)
+    if (sign) { sign.visible = false; sign.userData.doorPosterHidden = true }
   }
   rebuildWallAroundDoor(root, wall, wallBounds)
 }

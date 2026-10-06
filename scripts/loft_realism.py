@@ -1,11 +1,10 @@
 """Furniture proportions, imported focal pieces, and physical surface detail."""
 import math
 import bpy
-from mathutils import Vector
 
 
 def dress_loft(env):
-    cube, tube, imported, xyz = (env[k] for k in ('cube', 'tube', 'imported', 'xyz'))
+    cube, tube, imported = (env[k] for k in ('cube', 'tube', 'imported'))
     layout, simple, texture = (env[k] for k in ('layout', 'simple', 'texture'))
     oak, steel, cream = (env[k] for k in ('veneer', 'black', 'cream'))
 
@@ -46,9 +45,8 @@ def dress_loft(env):
     for i in range(4):
         cube('workshop materials book', (6.63,.2+i*.055,-1.46), (.38,.049,.5), (cream,oak,seam)[i%3],.004)
 
-    # Dense enough cushions for subtle sag and wrinkles, with real seam piping.
-    cloth = bpy.data.materials.get('lounge woven linen')
-    stitching = simple('upholstery seam', (.20,.26,.28), .95)
+    # Dense enough cushions for subtle sag and wrinkles.
+    leather = bpy.data.materials.get('lounge aged leather')
     for obj in list(bpy.data.objects):
         if not obj.name.startswith(('lounge sofa seat cushion','lounge sofa back cushion','lounge loose olive pillow')):
             continue
@@ -70,22 +68,8 @@ def dress_loft(env):
                 p = vertex.co
                 if p.z > .08:
                     p.z -= .025 * max(0,1-(p.x/.62)**2) * max(0,1-(p.y/.58)**2)
-            cx = obj.location.x
-            points = [(cx-.51, .57,11.49),(cx+.51,.57,11.49),(cx+.62,.57,11.59),
-                      (cx+.62,.57,12.45),(cx+.51,.57,12.56),(cx-.51,.57,12.56),
-                      (cx-.62,.57,12.45),(cx-.62,.57,11.59)]
-            curve = bpy.data.curves.new('tailored cushion seam','CURVE')
-            curve.dimensions='3D'; curve.bevel_depth=.0035; curve.bevel_resolution=2
-            path=curve.splines.new('BEZIER'); path.bezier_points.add(len(points)-1)
-            for vertex,position in zip(path.bezier_points,points):
-                vertex.co=Vector(xyz(*position)); vertex.handle_left_type='AUTO'; vertex.handle_right_type='AUTO'
-            path.use_cyclic_u=True
-            seam_obj=bpy.data.objects.new('lounge sofa tailored piping',curve)
-            bpy.context.collection.objects.link(seam_obj); seam_obj.data.materials.append(stitching)
-            bpy.ops.object.select_all(action='DESELECT'); seam_obj.select_set(True)
-            bpy.context.view_layer.objects.active=seam_obj; bpy.ops.object.convert(target='MESH')
-    # Textiles have shallow normal detail; polished metal keeps a distinct response.
-    if cloth:
-        for node in cloth.node_tree.nodes:
+    # Leather grain stays subtle so the sofa reflects warm light without gloss.
+    if leather:
+        for node in leather.node_tree.nodes:
             if node.type == 'NORMAL_MAP': node.inputs['Strength'].default_value=.22
     bpy.context.view_layer.update()

@@ -28,6 +28,22 @@ export default function WindowSunlight({ mobile, reducedMotion }: { mobile: bool
         indices.push(start,start+1,start+2, start,start+2,start+3)
       }
     }
+    // The lounge's full-height glazing catches the same daylight. These share
+    // the studio shaft geometry and shader, so they add no extra draw call.
+    for (const windowX of [-3.8, 0, 3.8]) {
+      const [x, , z] = shellPoint([windowX, 0, 14.1])
+      for (let slice = 0; slice < slices; slice++) {
+        const v = (slice + .5) / slices
+        const y = 2.7 + v * 2.8
+        const endY = .2
+        const travel = 2.3 + v * .9
+        const w = 1.1
+        const start = positions.length / 3
+        positions.push(x-w,y,z, x+w,y,z, x+w-travel*.22,endY,z-travel, x-w-travel*.22,endY,z-travel)
+        uvs.push(0,0, 1,0, 1,1, 0,1)
+        indices.push(start,start+1,start+2, start,start+2,start+3)
+      }
+    }
     const geometry = new THREE.BufferGeometry()
     geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
     geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2))
@@ -55,7 +71,7 @@ export default function WindowSunlight({ mobile, reducedMotion }: { mobile: bool
     return { geometry, material, slices }
   }, [mobile])
   useFrame(() => {
-    resources.material.uniforms.strength.value = environment.directSun * .85 / resources.slices
+    resources.material.uniforms.strength.value = environment.directSun * .58 / resources.slices
     resources.material.uniforms.time.value = reducedMotion ? 0 : environment.cycleSeconds
     resources.material.uniforms.tint.value.copy(environment.sunColor)
   })

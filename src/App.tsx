@@ -3,9 +3,9 @@ import type { Focus } from './LoftScene'
 import portfolio from '../content/portfolio.json'
 import { artifactById } from './roomArtifacts'
 import { getVisitWeather, type Weather } from './visitWeather'
+import StudioWireframeLoader from './StudioWireframeLoader'
 
 const LoftScene = lazy(() => import('./LoftScene'))
-const ThreepipeAssetPreview = lazy(() => import('./ThreepipeAssetPreview'))
 type SectionFocus = Exclude<Focus, 'room' | 'upstairs' | 'lounge' | 'nook'>
 
 class SceneImportBoundary extends Component<{ children: ReactNode, onError: () => void }, { failed: boolean }> {
@@ -19,15 +19,16 @@ const sections: { id: SectionFocus, number: string, label: string, object: strin
   { id: 'computer', number: '01', label: 'Overview', object: 'The computer' },
   { id: 'projects', number: '02', label: 'Projects', object: 'The workbench' },
   { id: 'experience', number: '03', label: 'Experience', object: 'The wall' },
-  { id: 'about', number: '04', label: 'About', object: 'The shelf' },
-  { id: 'contact', number: '05', label: 'Contact', object: 'The doorway' },
+  { id: 'about', number: '04', label: 'About Me', object: 'The shelf' },
+  { id: 'contact', number: '05', label: 'Contact', object: 'The console' },
 ]
 
 type RouteState = { focus: Focus, selectedProject: number | null, selectedArtifact?: string | null }
 
 function routeFromHash(hash: string): RouteState {
   const parts = hash.replace(/^#\/?/, '').split('/').filter(Boolean)
-  if (!parts.length || (parts.length === 1 && parts[0] === 'room')) return { focus: 'room', selectedProject: null }
+  if (!parts.length) return { focus: 'room', selectedProject: null }
+  if (parts.length === 1 && parts[0] === 'room') return { focus: 'room', selectedProject: null }
   if (parts.length === 1 && (parts[0] === 'upstairs' || parts[0] === 'lounge' || parts[0] === 'nook')) return { focus: parts[0], selectedProject: null }
   if (parts.length === 1 && parts[0] === 'overview') return { focus: 'computer', selectedProject: null }
   if (parts[0] === 'projects') {
@@ -147,33 +148,51 @@ function FocusPanel({ focus, selectedProject, sceneAvailable, onNavigate, onBack
     {focus === 'projects' && project && <>
       <p className="eyebrow">Blueprint / 0{selectedProject! + 1}</p>
       <h2 ref={headingRef} tabIndex={-1} className="project-title">{project.title}</h2>
+      <div className="project-photo-gallery" aria-label={`${project.title} screenshots`}>
+        {project.images.map((image) => <img key={image.src} src={`${import.meta.env.BASE_URL}${image.src}`} alt={image.alt} />)}
+      </div>
       <p className="panel-lead">{project.summary}</p>
       <div className="detail-meta"><span>{project.year} · {project.status}</span><span>{project.tools.join(' / ')}</span></div>
-      {'repository' in project && project.repository && <a className="text-link" href={project.repository} target="_blank" rel="noreferrer">View repository <Arrow diagonal /></a>}
+      <ul className="project-highlights">{project.highlights.map((highlight) => <li key={highlight}>{highlight}</li>)}</ul>
+      <div className="project-external-links">
+        {project.links.map((link) => <a className="text-link" key={link.url} href={link.url} target="_blank" rel="noreferrer">{link.label} <Arrow diagonal /></a>)}
+      </div>
       <button className="back-link blueprint-back" onClick={onBackToBlueprints}>← &nbsp; Back to blueprints</button>
     </>}
     {focus === 'experience' && <>
       <p className="eyebrow">Pinned to the wall</p>
       <h2 ref={headingRef} tabIndex={-1}>My<br className="short-screen-break" />{' '}<em>experience.</em></h2>
       <div className="experience-list">{portfolio.experience.map((role) => <article key={role.company}>
-        <span>{role.period}</span><h3>{role.company}</h3><p className="role">{role.role}</p><p>{role.summary}</p>
+        <span>{role.period} · {role.location}</span><h3>{role.company}</h3><p className="role">{role.role}</p><p className="experience-summary">{role.summary}</p>
+        <ul>{role.highlights.map((highlight) => <li key={highlight}>{highlight}</li>)}</ul>
       </article>)}</div>
     </>}
     {focus === 'about' && <>
-      <p className="eyebrow">The personal shelf</p>
-      <h2 ref={headingRef} tabIndex={-1}>More than<br /><em>code.</em></h2>
+      <p className="eyebrow">The personal shelf · About me</p>
+      <h2 ref={headingRef} tabIndex={-1}>About<br /><em>me.</em></h2>
       <p className="panel-lead">{portfolio.about}</p>
-      <Suspense fallback={<div className="threepipe-preview-state standalone" role="status">Preparing the camcorder…</div>}>
-        <ThreepipeAssetPreview />
-      </Suspense>
-      <div className="interests"><span>Camcorder / storytelling</span><span>Football / sports</span><span>Headphones / music</span><span>Recipes / cooking</span></div>
+      <div className="about-photo-gallery" aria-label="Photos from Vincent's life">
+        {portfolio.aboutPhotos.map((photo) => <figure key={photo.src}>
+          <img src={`${import.meta.env.BASE_URL}${photo.src}`} alt={photo.alt} />
+          <figcaption>{photo.caption}</figcaption>
+        </figure>)}
+      </div>
+      <p className="panel-label">Away from the screen</p>
+      <p className="panel-copy">{portfolio.outsideOfCode}</p>
+      <p className="panel-label">Education</p>
+      <p className="panel-copy">{portfolio.education}</p>
+      <div className="about-skills">
+        <p className="panel-label">Technical toolkit</p>
+        <ul>{portfolio.skills.map((skill) => <li key={skill}>{skill}</li>)}</ul>
+      </div>
     </>}
     {focus === 'contact' && <>
-      <p className="eyebrow">The doorway</p>
+      <p className="eyebrow">The contact console</p>
       <h2 ref={headingRef} tabIndex={-1}>Let’s make<br /><em>something.</em></h2>
-      <p className="panel-lead">I’m always interested in thoughtful work and good conversations.</p>
+      <p className="panel-lead">Reach me on LinkedIn, or find my code and hackathon projects online.</p>
       <a className="contact-primary" href={portfolio.links.linkedin} target="_blank" rel="noreferrer">Connect on LinkedIn <Arrow diagonal /></a>
       <a className="panel-row" href={portfolio.links.github} target="_blank" rel="noreferrer"><span>Explore GitHub</span><Arrow diagonal /></a>
+      <a className="panel-row" href={portfolio.links.devpost} target="_blank" rel="noreferrer"><span>Find me on Devpost</span><Arrow diagonal /></a>
     </>}
   </aside>
 }
@@ -195,11 +214,23 @@ export default function App() {
   const [weather] = useState<Weather>(() => getVisitWeather())
   const [sceneReady, setSceneReady] = useState(false)
   const [sceneFailed, setSceneFailed] = useState(() => !canUseWebGL() || new URLSearchParams(window.location.search).has('no3d'))
+  const [loaderPhase, setLoaderPhase] = useState<'loading' | 'revealing' | 'done'>('loading')
+  const loaderStartedAt = useRef(Date.now())
   const navLinksRef = useRef<Partial<Record<SectionFocus, HTMLAnchorElement | null>>>({})
   const reducedMotion = useMedia('(prefers-reduced-motion: reduce)')
   const mobile = useMedia('(max-width: 700px)')
   const onReady = useCallback(() => setSceneReady(true), [])
   const onError = useCallback(() => setSceneFailed(true), [])
+
+  useEffect(() => {
+    if (sceneFailed) { setLoaderPhase('done'); return }
+    if (!sceneReady) return
+    if (reducedMotion) { setLoaderPhase('done'); return }
+    const wait = Math.max(0, 1250 - (Date.now() - loaderStartedAt.current))
+    const reveal = window.setTimeout(() => setLoaderPhase('revealing'), wait)
+    const finish = window.setTimeout(() => setLoaderPhase('done'), wait + 950)
+    return () => { window.clearTimeout(reveal); window.clearTimeout(finish) }
+  }, [sceneReady, sceneFailed, reducedMotion])
 
   const navigate = useCallback((next: RouteState) => {
     const hash = hashForRoute(next)
@@ -310,6 +341,7 @@ export default function App() {
       </Suspense></SceneImportBoundary>}
     </div>
     <div className="scene-vignette" aria-hidden="true" />
+    {!sceneFailed && loaderPhase !== 'done' && <StudioWireframeLoader revealing={loaderPhase === 'revealing'} reducedMotion={reducedMotion} />}
     <header className="site-header">
       <nav id="page-navigation" className="site-nav" aria-label="Portfolio pages">
         {sections.map((section) => <a key={section.id}
@@ -326,10 +358,10 @@ export default function App() {
         <a key={destination} href={`#/${destination}`} aria-current={focus === destination ? 'location' : undefined}
           onClick={(event) => { event.preventDefault(); onFocus(destination) }}>{label}</a>)}
     </nav>}
-    <span className="visually-hidden" role="status">{focus === 'nook' ? 'Listening nook. Use the stereo to play or pause music and change tracks, or switch the reading lamp.' : focus === 'upstairs' ? 'Upstairs reading nook. Use the lamp or open the journal.' : focus === 'lounge' ? 'Lounge. Switch the lamp, control the music, or browse the project archive.' : ''}</span>
+    <span className="visually-hidden" role="status">{focus === 'nook' ? 'Listening nook. Use the stereo to play or pause music and change tracks, or switch the reading lamp.' : focus === 'upstairs' ? 'Upstairs reading nook. Use the lamp or open the journal.' : focus === 'lounge' ? 'Living room. Switch the lamp or open the photo book to read about Vincent.' : ''}</span>
     {!sceneReady && !sceneFailed && <div className="scene-status visually-hidden" role="status">Preparing the loft…</div>}
     {sceneFailed && <div className="scene-fallback" role="status"><span>3D VIEW UNAVAILABLE</span><p>The room could not load. Use the destinations to explore this portfolio.</p></div>}
-    {focus !== 'room' && (sceneFailed || (focus !== 'computer' && focus !== 'projects' && focus !== 'experience' && focus !== 'about')) && <FocusPanel focus={focus} selectedProject={selectedProject} sceneAvailable={!sceneFailed}
+    {focus !== 'room' && (sceneFailed || (focus !== 'computer' && focus !== 'projects' && focus !== 'experience' && focus !== 'about' && focus !== 'contact')) && <FocusPanel focus={focus} selectedProject={selectedProject} sceneAvailable={!sceneFailed}
       onNavigate={navigate} onBack={onBack} onBackToBlueprints={onBackToBlueprints} />}
   </main>
 }
