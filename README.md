@@ -39,23 +39,6 @@ Vite's configured base path is `/interactive-portfolio/`, matching this reposito
 
 The 3D model is committed at `public/models/loft-room.glb`; Blender is not needed to run the site. If WebGL cannot start, the model fails, or the rendering context is lost, the same HTML destination controls and content panels remain available over a CSS background. Append `?no3d=1` locally to preview this fallback.
 
-## Edit the portfolio
-
-- Content: `content/portfolio.json` (projects, roles, introduction, and links)
-- Destination panels and route state: `src/App.tsx`
-- 3D hotspots and camera positions: `src/LoftScene.tsx`
-- Layout and responsive states: `src/styles.css`
-- Screen, experience wall, and blueprint artwork: `scripts/make_graphics.py`
-- Editable room geometry, material assignment, and GLB export: `scripts/build_loft.py` and `assets/loft-room.blend`
-
-To regenerate artwork and the model on macOS:
-
-```bash
-python3 scripts/make_graphics.py
-blender --background --factory-startup --python scripts/build_loft.py
-```
-
-`make_graphics.py` needs Pillow. If Python does not have it, install it in a virtual environment. The Blender script expects the source assets in `assets/source/`, which are included in this repository. `scripts/fetch_assets.py` can fetch them again from Poly Haven. See [ASSETS.md](ASSETS.md) for credits and license.
 
 ## Technical notes
 
